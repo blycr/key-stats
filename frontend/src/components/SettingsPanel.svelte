@@ -84,7 +84,8 @@
 <svelte:window on:keydown={onKeydown}/>
 
 {#if show}
-<div class="fixed inset-0 z-[200] flex items-center justify-center" on:click|self={closePanel}>
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<div class="fixed inset-0 z-[200] flex items-center justify-center" on:click|self={closePanel} on:keydown={onKeydown} role="presentation">
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"></div>
 
     <div class="relative w-[420px] bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] overflow-hidden animate-modal-in">

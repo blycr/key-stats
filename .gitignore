@@ -1,5 +1,6 @@
 # Build artifacts
 build/bin/
+rsrc_windows_amd64.syso
 frontend/dist/
 
 # Dependencies

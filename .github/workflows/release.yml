@@ -31,8 +31,11 @@ jobs:
       - name: Build frontend & bindings
         run: wails build -s
 
+      - name: Generate Windows resource (icon)
+        run: go run github.com/akavel/rsrc@latest -ico build/windows/icon.ico -o rsrc_windows_amd64.syso
+
       - name: Compile with stripped symbols
-        run: go build -ldflags="-s -w" -o build/bin/key-stats.exe .
+        run: go build -tags "desktop,production" -trimpath -ldflags="-H windowsgui -s -w" -o build/bin/key-stats.exe .
 
       - name: Read release notes
         id: notes

@@ -34,6 +34,8 @@ key-stats/
 ├── main.go                    # Entry point (embed + wails.Run)
 ├── wails.json                 # Wails config (bun scripts)
 ├── go.mod / go.sum
+├── scripts/
+│   └── build.cmd              # Production build script
 ├── build/
 │   ├── appicon.png
 │   └── windows/
@@ -70,33 +72,34 @@ key-stats/
 
 ## Prerequisites
 
-- Go 1.25+
+- Go 1.24+
 - [Bun](https://bun.sh/)
 - Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
 - Windows 10/11
 
 ## Development
 
-```bash
-# Run in dev mode (hot-reload)
+```cmd
+:: Run in dev mode (hot-reload)
 wails dev
 
-# Build production binary (stripped, ~8.5MB)
-./build.sh
+:: Build production binary
+scripts\build.cmd
 
-# Or manually:
+:: Or manually:
 wails build -s
-go build -ldflags="-s -w" -o build/bin/key-stats.exe .
+go run github.com/akavel/rsrc@latest -ico build\windows\icon.ico -o rsrc_windows_amd64.syso
+go build -tags "desktop,production" -trimpath -ldflags="-H windowsgui -s -w" -o build\bin\key-stats.exe .
 ```
 
 ## Release
 
 Releases are built automatically by GitHub Actions when a version tag is pushed.
 
-```bash
-# 1. Bump version in wails.json
-# 2. Write release notes: docs/releases/v1.0.1.md
-# 3. Tag and push
+```cmd
+:: 1. Bump version in wails.json
+:: 2. Write release notes: docs\releases\v1.0.1.md
+:: 3. Tag and push
 git tag v1.0.1
 git push --tags
 ```

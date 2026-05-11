@@ -3,8 +3,8 @@
     export let title = '';
     export let message = '';
     export let mode = 'info'; // 'info' | 'confirm'
-    export let confirmText = '确定';
-    export let cancelText = '取消';
+    export let confirmText = 'OK';
+    export let cancelText = 'Cancel';
 
     import { createEventDispatcher } from 'svelte';
     const dispatch = createEventDispatcher();
@@ -38,17 +38,18 @@
 <svelte:window on:keydown={onKeydown}/>
 
 {#if show}
-<div class="fixed inset-0 z-[200] flex items-center justify-center" on:click|self={onBackdropClick}>
-    <!-- 背景遮罩 -->
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<div class="fixed inset-0 z-[200] flex items-center justify-center" on:click|self={onBackdropClick} on:keydown={onKeydown} role="presentation">
+    <!-- Backdrop overlay -->
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"></div>
     
-    <!-- 弹窗卡片 -->
+    <!-- Modal card -->
     <div class="relative w-[360px] bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] overflow-hidden animate-modal-in">
-        <!-- 顶部装饰线 -->
+        <!-- Top accent line -->
         <div class="h-0.5 w-full bg-gradient-to-r from-transparent via-accent/50 to-transparent"></div>
         
         <div class="p-6 flex flex-col items-center text-center">
-            <!-- 图标 -->
+            <!-- Icon -->
             {#if mode === 'confirm'}
                 <div class="w-12 h-12 rounded-full bg-danger/10 flex items-center justify-center mb-4">
                     <svg class="w-6 h-6 text-danger" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -63,14 +64,14 @@
                 </div>
             {/if}
             
-            <!-- 标题 -->
+            <!-- Title -->
             <h3 class="text-sm font-semibold text-text-primary mb-2">{title}</h3>
             
-            <!-- 内容 -->
+            <!-- Content -->
             <p class="text-xs text-text-secondary leading-relaxed whitespace-pre-line">{message}</p>
         </div>
         
-        <!-- 按钮区 -->
+        <!-- Button row -->
         <div class="px-6 pb-6 flex gap-3 justify-center">
             {#if mode === 'confirm'}
                 <button 

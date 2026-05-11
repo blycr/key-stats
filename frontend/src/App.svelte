@@ -5,7 +5,7 @@
     import SettingsPanel from './components/SettingsPanel.svelte';
     import { WindowHide, Quit } from '../wailsjs/runtime/runtime.js';
 
-    // 默认空数据结构
+    // Default empty data structure
     let statsData = {
         totalKeys: 0,
         topKeys: [],
@@ -157,6 +157,18 @@
         }
     }
 
+    function handleMainKeydown(e) {
+        if (e.key === 'Escape' && showMenu) {
+            closeMenu();
+        }
+    }
+
+    function handleMenuKeydown(e) {
+        if (e.key === 'Escape') {
+            closeMenu();
+        }
+    }
+
     onMount(() => {
         fetchLiveStats();
         const interval = setInterval(() => {
@@ -186,9 +198,11 @@
     });
 </script>
 
-<main class="w-screen h-screen flex flex-col bg-surface text-text-primary overflow-hidden selection:bg-accent/30 font-sans relative" on:click={handleMainClick}>
+<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+<main class="w-screen h-screen flex flex-col bg-surface text-text-primary overflow-hidden selection:bg-accent/30 font-sans relative" on:click={handleMainClick} on:keydown={handleMainKeydown} role="application">
     
-    <!-- 顶部状态栏 — 鼠标按下时调用 Go 端 StartDrag 实现无边框窗口拖动 -->
+    <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+    <!-- Title bar — on mousedown calls Go StartDrag for frameless window drag -->
     <div class="h-[72px] flex items-center justify-between px-6 bg-surface-raised border-b border-surface-overlay/50 shadow-sm z-50 select-none cursor-default"
          on:mousedown={(e) => { if (!e.target.closest('button')) window.go?.app?.App?.StartDrag?.(); }}
          on:contextmenu={(e) => toggleMenu('context', e)}
@@ -213,7 +227,7 @@
                 {isLive ? 'Live' : 'Paused'}
             </button>
             
-            <!-- 菜单按钮 ⋯ -->
+            <!-- Menu button -->
             <button 
                 class="w-8 h-8 flex items-center justify-center rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-overlay/50 transition-all duration-200"
                 on:click|stopPropagation={(e) => toggleMenu('dropdown', e)}
@@ -224,12 +238,16 @@
         </div>
     </div>
 
-    <!-- 下拉 / 右键 菜单 -->
+    <!-- Dropdown / context menu -->
     {#if showMenu}
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div class="fixed z-[100] w-48 py-1.5 bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/40 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden origin-top-right animate-menu"
          style={menuMode === 'context' ? `left: ${menuPos.x}px; top: ${menuPos.y}px;` : 'right: 24px; top: 72px;'}
          data-menu
+         role="menu"
+         tabindex="-1"
          on:click|stopPropagation
+         on:keydown={handleMenuKeydown}
     >
         <button class="w-full px-4 py-2.5 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-overlay/60 transition-colors flex items-center gap-3" on:click={resetStats}>
             <svg class="w-3.5 h-3.5 opacity-70" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
@@ -260,11 +278,11 @@
     </div>
     {/if}
 
-    <!-- 主展示区 -->
+    <!-- Main content area -->
     <div class="flex-1 flex p-6 gap-6 overflow-hidden relative">
-        <!-- 侧边栏：今日汇总 & 排行榜 -->
+        <!-- Sidebar: today's summary & ranking -->
         <div class="w-[320px] flex flex-col gap-6 z-10">
-            <!-- 总数卡片 -->
+            <!-- Total count card -->
             <div class="bg-surface-raised/80 backdrop-blur-lg rounded-2xl p-5 border border-surface-overlay/50 shadow-card flex flex-col gap-1 transition-transform hover:-translate-y-0.5 duration-300">
                 <h2 class="text-[10px] font-bold text-text-tertiary tracking-widest uppercase mb-1">Today's Keystrokes</h2>
                 <div class="text-4xl font-mono text-white font-light flex items-baseline gap-2">
@@ -273,29 +291,29 @@
                 </div>
             </div>
 
-            <!-- 排行榜卡片 -->
+            <!-- Ranking card -->
             <div class="bg-surface-raised/80 backdrop-blur-lg rounded-2xl p-5 border border-surface-overlay/50 shadow-card flex-1 overflow-hidden flex flex-col">
                 <h2 class="text-[10px] font-bold text-text-tertiary tracking-widest uppercase mb-4">Top Keys</h2>
                 
                 <div class="flex flex-col gap-4 overflow-y-auto pr-3 custom-scrollbar h-full">
                     {#each statsData.topKeys as key, i (key.keyName)}
                         <div class="flex items-center gap-3 group relative">
-                            <!-- 序号 -->
+                            <!-- Rank number -->
                             <span class="text-text-tertiary font-mono text-[10px] w-3 text-right">{i + 1}</span>
                             
-                            <!-- 按键名 -->
+                            <!-- Key name -->
                             <span class="font-mono bg-surface-overlay/50 border border-surface-overlay text-text-primary px-2 py-0.5 rounded text-[11px] w-14 text-center shadow-sm">
                                 {key.keyName}
                             </span>
                             
-                            <!-- 进度条 -->
+                            <!-- Progress bar -->
                             <div class="flex-1 h-1.5 bg-surface-overlay/30 rounded-full overflow-hidden relative">
                                 <div class="absolute left-0 top-0 h-full bg-accent transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(108,99,255,0.5)]" 
                                      style="width: {(key.count / Math.max(...statsData.topKeys.map(k => k.count), 1)) * 100}%">
                                 </div>
                             </div>
                             
-                            <!-- 数量 -->
+                            <!-- Count -->
                             <span class="text-text-secondary font-mono text-xs w-10 text-right">{key.count}</span>
                         </div>
                     {/each}
@@ -309,7 +327,7 @@
             </div>
         </div>
 
-        <!-- 右侧：键盘热力图 -->
+        <!-- Right side: keyboard heatmap -->
         <div class="flex-1 flex flex-col gap-6 z-10 relative">
             <div class="flex-1 bg-surface-raised/80 backdrop-blur-lg rounded-2xl p-6 border border-surface-overlay/50 shadow-card flex flex-col">
                 <h2 class="text-[10px] font-bold text-text-tertiary tracking-widest uppercase mb-6 flex items-center justify-between">
@@ -323,11 +341,11 @@
             </div>
         </div>
         
-    <!-- 背景装饰光晕 -->
+    <!-- Background decorative glow -->
     <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-accent/5 rounded-full blur-[120px] pointer-events-none z-0"></div>
 </main>
 
-<!-- 全局弹窗 -->
+<!-- Global modal -->
 <Modal
     bind:show={modalShow}
     title={modalTitle}
@@ -339,14 +357,14 @@
     on:cancel={() => modalShow = false}
 />
 
-<!-- 设置面板 -->
+<!-- Settings panel -->
 <SettingsPanel bind:show={showSettingsPanel} />
 
 <style>
-    /* 全局隐藏滚动条，保持滚动功能 */
+    /* Hide scrollbar globally, keep scroll functionality */
     :global(::-webkit-scrollbar) { width: 0px; background: transparent; }
     
-    /* 菜单弹出动画 */
+    /* Menu pop-in animation */
     @keyframes menuIn {
         from { opacity: 0; transform: scale(0.95); }
         to   { opacity: 1; transform: scale(1); }

@@ -4,6 +4,8 @@ import (
 	"embed"
 	"log"
 
+	"key-stats/pkg/app"
+
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -13,11 +15,12 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-func main() {
-	// Create an instance of the app structure
-	app := NewApp()
+//go:embed build/appicon.png
+var appIcon []byte
 
-	// Create application with options
+func main() {
+	application := app.NewApp(appIcon)
+
 	err := wails.Run(&options.App{
 		Title:     "KeyStats",
 		Width:     1280,
@@ -28,8 +31,8 @@ func main() {
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 28, G: 28, B: 30, A: 1},
-		OnStartup:        app.Startup,
-		OnShutdown:       app.Shutdown,
+		OnStartup:        application.Startup,
+		OnShutdown:       application.Shutdown,
 		Frameless:        true,
 		Windows: &windows.Options{
 			WebviewIsTransparent:              true,
@@ -39,7 +42,7 @@ func main() {
 			DisableFramelessWindowDecorations: false,
 		},
 		Bind: []interface{}{
-			app,
+			application,
 		},
 	})
 

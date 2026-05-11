@@ -1,15 +1,15 @@
 //go:build windows
 
-package main
+package app
 
 import (
 	"syscall"
 )
 
 var (
-	user32DLL          = syscall.NewLazyDLL("user32.dll")
-	procReleaseCapture = user32DLL.NewProc("ReleaseCapture")
-	procSendMessageW   = user32DLL.NewProc("SendMessageW")
+	user32DLL               = syscall.NewLazyDLL("user32.dll")
+	procReleaseCapture      = user32DLL.NewProc("ReleaseCapture")
+	procSendMessageW        = user32DLL.NewProc("SendMessageW")
 	procGetForegroundWindow = user32DLL.NewProc("GetForegroundWindow")
 )
 

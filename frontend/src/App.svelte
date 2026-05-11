@@ -1,6 +1,7 @@
 <script>
     import { onMount } from 'svelte';
     import KeyboardMap from './components/KeyboardMap.svelte';
+    import { WindowHide, Quit } from '../wailsjs/runtime/runtime.js';
 
     // 默认空数据结构
     let statsData = {
@@ -10,10 +11,13 @@
     };
     
     let isLive = true;
+    let showMenu = false;
+    let menuPos = { x: 0, y: 0 };
+    let menuMode = 'dropdown'; // 'dropdown' | 'context'
 
-    // 假设 Wails 已经绑定了后端的方法 window.go.main.App.GetTodayStats
+    // 假设 Wails 已经绑定了后端的方法 window.go.app.App.GetTodayStats
     async function fetchLiveStats() {
-        if (!window.go?.main?.App?.GetTodayStats) {
+        if (!window.go?.app?.App?.GetTodayStats) {
             // Mock 数据，方便你在没有后端启动时在浏览器预览丝滑动画
             statsData = {
                 totalKeys: 12847,
@@ -30,7 +34,7 @@
         }
 
         try {
-            const data = await window.go.main.App.GetTodayStats();
+            const data = await window.go.app.App.GetTodayStats();
             // 防止未实现的 stub 覆盖界面
             if (data && data.status !== 'not implemented') {
                  statsData = data;
@@ -40,6 +44,49 @@
         }
     }
 
+    function refreshStats() {
+        fetchLiveStats();
+        closeMenu();
+    }
+
+    function showStatus() {
+        const total = statsData.totalKeys.toLocaleString();
+        alert(`KeyStats 状态\n\n今日按键数: ${total}\n记录状态: ${isLive ? '实时记录中' : '已暂停'}`);
+        closeMenu();
+    }
+
+    function minimizeApp() {
+        WindowHide();
+        closeMenu();
+    }
+
+    function quitApp() {
+        closeMenu();
+        // Quit 会触发 OnShutdown，自动 flush DB + 停钩子
+        Quit();
+    }
+
+    function openSettings() {
+        alert('设置功能即将上线');
+        closeMenu();
+    }
+
+    function toggleMenu(mode, e) {
+        if (mode === 'dropdown') {
+            menuMode = 'dropdown';
+            showMenu = !showMenu;
+        } else {
+            e.preventDefault();
+            menuMode = 'context';
+            menuPos = { x: e.clientX, y: e.clientY };
+            showMenu = true;
+        }
+    }
+
+    function closeMenu() {
+        showMenu = false;
+    }
+
     onMount(() => {
         fetchLiveStats();
         // 配合后端 500ms 批量写入，前端 500ms 轮询以降低延迟
@@ -47,15 +94,22 @@
             if (isLive) fetchLiveStats();
         }, 500);
 
-        return () => clearInterval(interval);
+        const handleClickOutside = () => closeMenu();
+        document.addEventListener('click', handleClickOutside);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('click', handleClickOutside);
+        };
     });
 </script>
 
-<main class="w-screen h-screen flex flex-col bg-surface text-text-primary overflow-hidden selection:bg-accent/30 font-sans">
+<main class="w-screen h-screen flex flex-col bg-surface text-text-primary overflow-hidden selection:bg-accent/30 font-sans relative">
     
     <!-- 顶部状态栏 — 鼠标按下时调用 Go 端 StartDrag 实现无边框窗口拖动 -->
     <div class="h-14 flex items-center justify-between px-6 bg-surface-raised border-b border-surface-overlay/50 shadow-sm z-50 select-none cursor-default"
-         on:mousedown={() => window.go?.main?.App?.StartDrag?.()}
+         on:mousedown={() => window.go?.app?.App?.StartDrag?.()}
+         on:contextmenu={(e) => toggleMenu('context', e)}
          role="banner"
     >
         <div class="flex items-center gap-3 tracking-wide pointer-events-none">
@@ -76,8 +130,52 @@
                 <div class="w-2 h-2 rounded-full {isLive ? 'bg-success animate-pulse shadow-[0_0_8px_rgba(48,209,88,0.6)]' : 'bg-text-secondary'}"></div>
                 {isLive ? 'Live' : 'Paused'}
             </button>
+            
+            <!-- 菜单按钮 ⋯ -->
+            <button 
+                class="w-8 h-8 flex items-center justify-center rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-overlay/50 transition-all duration-200"
+                on:click|stopPropagation={(e) => toggleMenu('dropdown', e)}
+                aria-label="Menu"
+            >
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+            </button>
         </div>
     </div>
+
+    <!-- 下拉 / 右键 菜单 -->
+    {#if showMenu}
+    <div class="fixed z-[100] w-48 py-1.5 bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/40 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden origin-top-right animate-menu"
+         style={menuMode === 'context' ? `left: ${menuPos.x}px; top: ${menuPos.y}px;` : 'right: 24px; top: 56px;'}
+         on:click|stopPropagation
+    >
+        <button class="w-full px-4 py-2.5 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-overlay/60 transition-colors flex items-center gap-3" on:click={refreshStats}>
+            <svg class="w-3.5 h-3.5 opacity-70" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            刷新记录
+        </button>
+        
+        <div class="h-px bg-surface-overlay/40 mx-2 my-1"></div>
+        
+        <button class="w-full px-4 py-2.5 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-overlay/60 transition-colors flex items-center gap-3" on:click={showStatus}>
+            <svg class="w-3.5 h-3.5 opacity-70" fill="currentColor" viewBox="0 0 24 24"><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>
+            状态信息
+        </button>
+        <button class="w-full px-4 py-2.5 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-overlay/60 transition-colors flex items-center gap-3" on:click={openSettings}>
+            <svg class="w-3.5 h-3.5 opacity-70" fill="currentColor" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84a.484.484 0 00-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.488.488 0 00-.59.22L2.74 8.87a.49.49 0 00.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.27.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            设置
+        </button>
+        
+        <div class="h-px bg-surface-overlay/40 mx-2 my-1"></div>
+        
+        <button class="w-full px-4 py-2.5 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-overlay/60 transition-colors flex items-center gap-3" on:click={minimizeApp}>
+            <svg class="w-3.5 h-3.5 opacity-70" fill="currentColor" viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>
+            最小化到托盘
+        </button>
+        <button class="w-full px-4 py-2.5 text-xs text-danger/80 hover:text-danger hover:bg-danger/10 transition-colors flex items-center gap-3" on:click={quitApp}>
+            <svg class="w-3.5 h-3.5 opacity-70" fill="currentColor" viewBox="0 0 24 24"><path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
+            退出应用
+        </button>
+    </div>
+    {/if}
 
     <!-- 主展示区 -->
     <div class="flex-1 flex p-6 gap-6 overflow-hidden relative">
@@ -150,4 +248,13 @@
 <style>
     /* 全局隐藏滚动条，保持滚动功能 */
     :global(::-webkit-scrollbar) { width: 0px; background: transparent; }
+    
+    /* 菜单弹出动画 */
+    @keyframes menuIn {
+        from { opacity: 0; transform: scale(0.95); }
+        to   { opacity: 1; transform: scale(1); }
+    }
+    .animate-menu {
+        animation: menuIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
 </style>

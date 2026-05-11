@@ -1,0 +1,13 @@
+# Windows-only project — use CRLF for all text files
+* text=auto eol=crlf
+
+# Binary files — do not convert line endings
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.db binary
+*.db-wal binary
+*.db-shm binary
+*.exe binary

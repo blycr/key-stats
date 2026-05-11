@@ -42,10 +42,10 @@
 
     onMount(() => {
         fetchLiveStats();
-        // 60FPS 的丝滑感除了靠 CSS transition，轮询间隔也适度调快
+        // 配合后端 500ms 批量写入，前端 500ms 轮询以降低延迟
         const interval = setInterval(() => {
             if (isLive) fetchLiveStats();
-        }, 1000);
+        }, 500);
 
         return () => clearInterval(interval);
     });
@@ -54,8 +54,8 @@
 <main class="w-screen h-screen flex flex-col bg-surface text-text-primary overflow-hidden selection:bg-accent/30 font-sans">
     
     <!-- 顶部状态栏，使用拖拽区域属性以支持 Wails 无边框拖动 -->
-    <div class="h-14 flex items-center justify-between px-6 bg-surface-raised border-b border-surface-overlay/50 shadow-sm z-50" style="-webkit-app-region: drag">
-        <div class="flex items-center gap-3 tracking-wide">
+    <div class="h-14 flex items-center justify-between px-6 bg-surface-raised border-b border-surface-overlay/50 shadow-sm z-50 select-none" style="-webkit-app-region: drag">
+        <div class="flex items-center gap-3 tracking-wide" style="-webkit-app-region: no-drag">
             <div class="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center text-accent shadow-[0_0_10px_rgba(108,99,255,0.2)]">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4 3h16a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM6 7h2v2H6zm4 0h2v2h-2zm4 0h2v2h-2zm4 0h2v2h-2zM6 12h2v2H6zm4 0h2v2h-2zm4 0h2v2h-2zm4 0h2v2h-2zM6 17h12v2H6z"/></svg>
             </div>

@@ -100,7 +100,7 @@ func (d *DB) batchWriter() {
 		}
 	}()
 
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
 	var batch []models.KeyEvent

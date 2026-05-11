@@ -34,29 +34,29 @@
     // 设置特俗按键的宽度
     function getKeyWidthClass(keyLabel) {
         switch (keyLabel) {
-            case 'Space': return 'w-72';
+            case 'Space': return 'w-56';
             case 'Backspace':
             case 'Enter':
-            case 'Shift': return 'px-6';
+            case 'Shift': return 'px-5';
             case 'Tab':
-            case 'Caps': return 'px-5';
+            case 'Caps': return 'px-4';
             case 'Ctrl':
             case 'Alt':
-            case 'Win': return 'px-4';
-            default: return 'w-10';
+            case 'Win': return 'px-3';
+            default: return 'w-9';
         }
     }
 </script>
 
-<div class="flex flex-col gap-2 p-6 bg-surface-overlay/20 rounded-2xl backdrop-blur-xl border border-surface-overlay/50 shadow-card">
+<div class="flex flex-col gap-1.5 p-5 bg-surface-overlay/20 rounded-2xl backdrop-blur-xl border border-surface-overlay/50 shadow-card overflow-x-auto">
     {#each keyboardLayout as row}
-        <div class="flex justify-center gap-2">
+        <div class="flex justify-center gap-1.5 min-w-max">
             {#each row as key}
                 {@const count = getCount(key)}
                 <div class="
                     relative group flex items-center justify-center rounded-lg border border-surface-overlay/40
-                    transition-all duration-500 ease-out cursor-default
-                    {getKeyWidthClass(key)} h-10
+                    transition-all duration-500 ease-out cursor-default shrink-0
+                    {getKeyWidthClass(key)} h-9
                     {getHeatColor(count)}
                     hover:-translate-y-1 hover:shadow-[0_4px_20px_rgba(108,99,255,0.4)] hover:border-accent
                 ">

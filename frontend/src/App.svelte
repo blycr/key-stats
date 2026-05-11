@@ -3,7 +3,7 @@
     import KeyboardMap from './components/KeyboardMap.svelte';
     import Modal from './components/Modal.svelte';
     import SettingsPanel from './components/SettingsPanel.svelte';
-    import { WindowHide, Quit, EventsOn } from '../wailsjs/runtime/runtime.js';
+    import { WindowHide, Quit } from '../wailsjs/runtime/runtime.js';
 
     // 默认空数据结构
     let statsData = {
@@ -27,9 +27,6 @@
     let modalOnConfirm = () => {};
 
     let showSettingsPanel = false;
-
-    // Real-time key press flash for keyboard heatmap
-    let flashKey = { name: '', ts: 0 };
 
     function openModal({ title, message, mode = 'info', confirmText = 'OK', cancelText = 'Cancel', onConfirm = () => {} }) {
         modalTitle = title;
@@ -178,22 +175,10 @@
         }, 500);
         window.addEventListener('resize', saveSize);
 
-        // Listen for real-time key presses from the backend hook
-        let unsubscribeKeyPress = () => {};
-        if (EventsOn) {
-            unsubscribeKeyPress = EventsOn('key-pressed', (data) => {
-                const ev = Array.isArray(data) ? data[0] : data;
-                if (ev && ev.keyName) {
-                    flashKey = { name: ev.keyName, ts: Date.now() };
-                }
-            });
-        }
-
         return () => {
             clearInterval(interval);
             document.removeEventListener('click', handleClickOutside);
             window.removeEventListener('resize', saveSize);
-            unsubscribeKeyPress();
         };
     });
 </script>
@@ -329,7 +314,7 @@
                 </h2>
                 
                 <div class="flex-1 flex items-center justify-center">
-                    <KeyboardMap data={statsData.topKeys} {flashKey} />
+                    <KeyboardMap data={statsData.topKeys} />
                 </div>
             </div>
         </div>

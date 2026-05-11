@@ -81,7 +81,7 @@
     $: if (show) loadSettings();
 </script>
 
-<svelte:window on:keydown={onKeydown} on:click={onWindowClick}/>
+<svelte:window on:keydown={onKeydown}/>
 
 {#if show}
 <div class="fixed inset-0 z-[200] flex items-center justify-center" on:click|self={closePanel}>

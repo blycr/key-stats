@@ -2,7 +2,7 @@
 <script>
     export let show = false;
 
-    import { createEventDispatcher, onMount } from 'svelte';
+    import { createEventDispatcher } from 'svelte';
     const dispatch = createEventDispatcher();
 
     let settings = {
@@ -13,6 +13,13 @@
         dataDir: ''
     };
     let saving = false;
+    let showThemeDropdown = false;
+
+    const themeOptions = [
+        { value: 'dark', label: 'Dark' },
+        { value: 'light', label: 'Light' },
+        { value: 'auto', label: 'Auto' }
+    ];
 
     async function loadSettings() {
         if (!window.go?.app?.App?.GetConfig) return;
@@ -50,6 +57,7 @@
 
     function closePanel() {
         show = false;
+        showThemeDropdown = false;
         dispatch('close');
     }
 
@@ -57,10 +65,23 @@
         if (show && e.key === 'Escape') closePanel();
     }
 
+    function selectTheme(value) {
+        settings.theme = value;
+        showThemeDropdown = false;
+    }
+
+    // Close dropdown when clicking outside the panel or pressing Escape
+    function onWindowClick(e) {
+        if (showThemeDropdown) {
+            const dropdown = e.target.closest('.theme-dropdown-wrapper');
+            if (!dropdown) showThemeDropdown = false;
+        }
+    }
+
     $: if (show) loadSettings();
 </script>
 
-<svelte:window on:keydown={onKeydown}/>
+<svelte:window on:keydown={onKeydown} on:click={onWindowClick}/>
 
 {#if show}
 <div class="fixed inset-0 z-[200] flex items-center justify-center" on:click|self={closePanel}>
@@ -80,16 +101,29 @@
                         <div class="text-xs text-text-primary">Theme</div>
                         <div class="text-[10px] text-text-tertiary">Interface color scheme</div>
                     </div>
-                    <div class="relative">
-                        <select bind:value={settings.theme} class="appearance-none bg-surface-overlay/60 border border-surface-overlay text-text-primary text-xs rounded-lg px-3 py-1.5 pr-8 outline-none focus:border-accent transition-colors cursor-pointer min-w-[100px]">
-                            <option value="dark">Dark</option>
-                            <option value="light">Light</option>
-                            <option value="auto">Auto</option>
-                        </select>
-                        <!-- 自定义下拉箭头 -->
-                        <svg class="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-                        </svg>
+                    <div class="relative theme-dropdown-wrapper">
+                        <button
+                            class="min-w-[100px] flex items-center justify-between gap-2 bg-surface-overlay/60 border border-surface-overlay text-text-primary text-xs rounded-lg px-3 py-1.5 outline-none focus:border-accent transition-colors cursor-pointer"
+                            on:click|stopPropagation={() => showThemeDropdown = !showThemeDropdown}
+                        >
+                            <span>{themeOptions.find(o => o.value === settings.theme)?.label || settings.theme}</span>
+                            <svg class="w-3.5 h-3.5 text-text-tertiary transition-transform duration-200 {showThemeDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+
+                        {#if showThemeDropdown}
+                        <div class="absolute right-0 top-full mt-1 w-full min-w-[100px] bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden z-[300] animate-dropdown-in">
+                            {#each themeOptions as opt}
+                            <button
+                                class="w-full px-3 py-2 text-xs text-left transition-colors {settings.theme === opt.value ? 'text-text-primary bg-surface-overlay/40' : 'text-text-secondary hover:text-text-primary hover:bg-surface-overlay/30'}"
+                                on:click|stopPropagation={() => selectTheme(opt.value)}
+                            >
+                                {opt.label}
+                            </button>
+                            {/each}
+                        </div>
+                        {/if}
                     </div>
                 </div>
 
@@ -157,10 +191,17 @@
         from { opacity: 0; transform: scale(0.92) translateY(8px); }
         to { opacity: 1; transform: scale(1) translateY(0); }
     }
+    @keyframes dropdownIn {
+        from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+    }
     .animate-fade-in {
         animation: fadeIn 0.2s ease-out forwards;
     }
     .animate-modal-in {
         animation: modalIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .animate-dropdown-in {
+        animation: dropdownIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
 </style>

@@ -1,5 +1,6 @@
 <script>
     export let data = [];
+    export let flashKey = { name: '', ts: 0 };
 
     const keyboardLayout = [
         ['Esc', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'Backspace'],
@@ -50,6 +51,34 @@
         scale = Math.min(1, parentWidth / BASE_WIDTH);
     }
 
+    // Map backend key names to keyboard layout labels
+    const keyNameToLabel = {
+        'Back': 'Backspace',
+        'Caps': 'Caps',
+        'Esc': 'Esc',
+        'Enter': 'Enter',
+        'Tab': 'Tab',
+        'Space': 'Space',
+        'Shift': 'Shift',
+        'Ctrl': 'Ctrl',
+        'Alt': 'Alt',
+        'Win': 'Win',
+        'Fn': 'Fn',
+    };
+
+    function normalizeKeyName(name) {
+        return keyNameToLabel[name] || name;
+    }
+
+    let currentFlash = '';
+    let flashTimer;
+
+    $: if (flashKey.ts && flashKey.name) {
+        currentFlash = normalizeKeyName(flashKey.name);
+        clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => { currentFlash = ''; }, 180);
+    }
+
     import { onMount } from 'svelte';
     onMount(() => {
         updateScale();
@@ -57,7 +86,10 @@
         if (wrapperEl && wrapperEl.parentElement) {
             ro.observe(wrapperEl.parentElement);
         }
-        return () => ro.disconnect();
+        return () => {
+            ro.disconnect();
+            clearTimeout(flashTimer);
+        };
     });
 </script>
 
@@ -73,6 +105,7 @@
                             transition-all duration-500 ease-out cursor-default shrink-0
                             {getKeyWidthClass(key)} h-9
                             {getHeatColor(count)}
+                            {currentFlash && currentFlash.toUpperCase() === key.toUpperCase() ? 'key-flash' : ''}
                             hover:-translate-y-1 hover:shadow-[0_4px_20px_rgba(108,99,255,0.4)] hover:border-accent
                         ">
                             <span class="text-[11px] font-mono select-none">{key}</span>
@@ -90,3 +123,14 @@
         </div>
     </div>
 </div>
+
+<style>
+    /* Real-time key press flash — short bright pulse on the key cap */
+    :global(.key-flash) {
+        box-shadow: 0 0 20px rgba(108, 99, 255, 0.7), 0 0 8px rgba(108, 99, 255, 0.5) !important;
+        border-color: rgba(108, 99, 255, 0.8) !important;
+        transform: scale(1.12) !important;
+        z-index: 20 !important;
+        transition: all 0.04s ease-out !important;
+    }
+</style>

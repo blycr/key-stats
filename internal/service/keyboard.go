@@ -8,6 +8,7 @@ import (
 
 	"key-stats/internal/db"
 	"key-stats/internal/models"
+	"key-stats/internal/stats"
 )
 
 const (
@@ -62,11 +63,13 @@ type KeyboardService struct {
 	db     *db.DB
 	hook   uintptr
 	active bool
+	emit   func(eventName string, data ...interface{})
 }
 
-func NewKeyboardService(database *db.DB) *KeyboardService {
+func NewKeyboardService(database *db.DB, emit func(string, ...interface{})) *KeyboardService {
 	return &KeyboardService{
-		db: database,
+		db:   database,
+		emit: emit,
 	}
 }
 
@@ -151,6 +154,15 @@ func hookProc(nCode int32, wParam uintptr, lParam uintptr) uintptr {
 					KeyCode:   vk,
 					AppName:   getActiveWindowTitle(),
 					Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+				})
+			}
+
+			// Emit real-time key press event to frontend
+			if globalService != nil && globalService.emit != nil {
+				name := stats.VKToName(vk)
+				globalService.emit("key-pressed", map[string]interface{}{
+					"keyCode": vk,
+					"keyName": name,
 				})
 			}
 		}

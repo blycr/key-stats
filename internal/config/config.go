@@ -39,7 +39,13 @@ func defaults() *AppConfig {
 }
 
 // envPath returns the absolute path to the .env file.
-// Portable mode is auto-detected: if .env exists next to the executable, use it.
+//
+// Priority rule (when both locations have .env):
+//   1. Portable: if .env exists next to the executable → use it (portable mode).
+//   2. Roaming:  otherwise → use %APPDATA%/key-stats/.env.
+//
+// This means portable always wins when both are present. To force roaming mode,
+// delete the .env file next to the executable.
 func envPath() string {
 	exe, err := os.Executable()
 	if err == nil {

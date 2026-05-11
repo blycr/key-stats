@@ -9,6 +9,8 @@ import (
 	"key-stats/internal/service"
 	"key-stats/internal/stats"
 	"key-stats/pkg/tray"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
@@ -47,7 +49,9 @@ func (a *App) Startup(ctx context.Context) {
 	a.database = d
 
 	// 3. Start Keyboard Logger
-	a.keyboard = service.NewKeyboardService(d)
+	a.keyboard = service.NewKeyboardService(d, func(name string, data ...interface{}) {
+		runtime.EventsEmit(ctx, name, data...)
+	})
 	a.keyboard.Start()
 
 	// 4. Start system tray

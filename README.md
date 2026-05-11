@@ -23,7 +23,7 @@ Real-time keyboard usage tracker for Windows. Beautiful, minimal, and stays out 
 | Layer | Technology |
 |-------|------------|
 | Desktop framework | Wails v2 |
-| Backend | Go 1.25, modernc.org/sqlite |
+| Backend | Go 1.25+, modernc.org/sqlite |
 | Frontend | Svelte 4, Vite 5 |
 | Styling | Tailwind CSS 3 |
 | Package manager | Bun |
@@ -34,64 +34,72 @@ Real-time keyboard usage tracker for Windows. Beautiful, minimal, and stays out 
 ```
 key-stats/
 ├── main.go                    # Entry point (embed + wails.Run)
-├── wails.json                 # Wails config (bun scripts)
+├── wails.json                 # Wails config (bun scripts, version, product info)
 ├── go.mod / go.sum
 ├── scripts/
 │   ├── build.ps1              # Production build script (PowerShell)
-│   ├── gen_ico.go             # Multi-size ICO generator
-│   └── Clear-IconCache.ps1    # Clear Windows icon cache
+│   ├── gen_ico.go             # Multi-size ICO generator (from PNG source)
+│   └── Clear-IconCache.ps1    # Helper: clear Windows icon cache
 ├── build/
-│   ├── appicon.png
+│   ├── appicon.png            # Source icon for ICO generation
 │   └── windows/
-│       ├── icon.ico           # Windows multi-size icon
-│       └── wails.exe.manifest
+│       ├── icon.ico           # Windows multi-size icon (embedded into .exe)
+│       └── wails.exe.manifest # Windows manifest
 ├── frontend/
-│   ├── package.json
+│   ├── package.json           # Bun scripts + dev dependencies
 │   ├── vite.config.js
 │   ├── tailwind.config.js
+│   ├── index.html
 │   └── src/
-│       ├── App.svelte         # Main layout, menus, modals
-│       ├── app.css
+│       ├── main.js            # Svelte entry point
+│       ├── app.css            # Global styles + CSS font variable
+│       ├── App.svelte         # Main layout, title bar, menus, modals, polling loop
 │       └── components/
-│           ├── KeyboardMap.svelte
-│           └── Modal.svelte   # Custom glassmorphism dialogs
+│           ├── KeyboardMap.svelte   # QWERTY heatmap with auto-scaling
+│           ├── Modal.svelte         # Glassmorphism dialog (info/confirm)
+│           └── SettingsPanel.svelte # Theme, font, startup toggles
 ├── internal/
 │   ├── config/
-│   │   └── config.go          # Window size persistence
+│   │   └── config.go          # .env-based config + window size persistence
 │   ├── db/
-│   │   └── sqlite.go          # SQLite + batch writer
+│   │   └── sqlite.go          # SQLite init + batch writer goroutine
 │   ├── models/
-│   │   └── models.go
+│   │   └── models.go          # KeyEvent, TodaySummary structs
 │   ├── service/
-│   │   └── keyboard.go        # Win32 LL hook
+│   │   └── keyboard.go        # Win32 LL hook + message pump goroutine
 │   └── stats/
 │       └── stats.go           # VK code → key name mapping
-└── pkg/
-    ├── app/
-    │   ├── app.go             # App struct, lifecycle, API
-    │   └── drag_windows.go    # Native window drag
-    └── tray/
-        └── tray_windows.go    # System tray icon + menu
+├── pkg/
+│   ├── app/
+│   │   ├── app.go             # App struct, lifecycle, API bindings, window icon fix
+│   │   └── drag_windows.go    # Native window drag (frameless)
+│   └── tray/
+│       └── tray_windows.go    # System tray icon + menu
+└── docs/
+    └── releases/
+        └── v<version>.md      # Release notes per tag
 ```
 
 ## Prerequisites
 
-- Go 1.24+
+- Go 1.25+
 - [Bun](https://bun.sh/)
 - Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
 - Windows 10/11
 
 ## Development
 
-```cmd
-:: Run in dev mode (hot-reload)
+```powershell
+# Run in dev mode (hot-reload)
 wails dev
 
-:: Build production binary
-scripts\build.ps1
+# Build production binary
+.\scripts\build.ps1
 
-:: Or manually:
+# Or manually:
+cd frontend && bun install && bun run build && cd ..
 wails build -s
+cd frontend && bun run patch:wails && cd ..
 go run github.com/akavel/rsrc@latest -ico build\windows\icon.ico -o rsrc_windows_amd64.syso
 go build -tags "desktop,production" -trimpath -ldflags="-H windowsgui -s -w" -o build\bin\key-stats.exe .
 ```
@@ -100,11 +108,12 @@ go build -tags "desktop,production" -trimpath -ldflags="-H windowsgui -s -w" -o 
 
 Releases are built automatically by GitHub Actions when a version tag is pushed.
 
-```cmd
-:: 1. Bump version in wails.json
-:: 2. Write release notes: docs\releases\v1.0.1.md
-:: 3. Tag and push
-git tag v1.0.1
+```powershell
+# 1. Bump version in wails.json
+# 2. Write release notes: docs\releases\v1.0.2.md
+# 3. Commit and push
+# 4. Tag and push
+git tag v1.0.2
 git push --tags
 ```
 
@@ -143,20 +152,22 @@ CREATE TABLE key_events (
 );
 ```
 
-Config file (window size) at `%APPDATA%/key-stats/config.json`.
+Config file (`.env`) at `%APPDATA%/key-stats/.env`.
 
 ## Architecture
 
 ```
-Win32 Hook (goroutine)
+Win32 Hook (dedicated goroutine + message pump)
     ↓
 Event Channel (buffered, cap 4096)
     ↓
 Batch Writer (goroutine) — 500 ms / 256 events → SQLite (WAL)
+    ↑
+Real-time Events → rtChan (cap 256) → rtEmitter → runtime.EventsEmit
     ↑
 Wails Frontend ←—— 500 ms poll ——→ Svelte + Tailwind
 ```
 
 ## License
 
-Private project.
+MIT License — see [LICENSE](LICENSE).

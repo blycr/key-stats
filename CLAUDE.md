@@ -19,10 +19,9 @@ scripts\build.ps1
 
 ### Manual steps (only if debugging the build itself)
 ```cmd
-:: 1. Clean
+:: 1. Clean (do NOT delete frontend\wailsjs — Vite needs it)
 if exist rsrc_windows_amd64.syso del rsrc_windows_amd64.syso
 if exist frontend\dist rmdir /s /q frontend\dist
-if exist frontend\wailsjs rmdir /s /q frontend\wailsjs
 if exist build\bin rmdir /s /q build\bin
 
 :: 2. Frontend
@@ -42,7 +41,7 @@ go run github.com/akavel/rsrc@latest -ico build\windows\icon.ico -o rsrc_windows
 go build -tags "desktop,production" -trimpath -ldflags="-H windowsgui -s -w" -o build\bin\key-stats.exe .
 ```
 
-Prerequisites: Go 1.24+, Bun, Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`), Windows 10/11.
+Prerequisites: Go 1.25+, Bun, Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`), Windows 10/11.
 
 ## Project Structure
 
@@ -52,7 +51,9 @@ key-stats\
 ├── wails.json                  # Wails config (bun scripts)
 ├── go.mod / go.sum
 ├── scripts\
-│   └── build.ps1               # Production build script (PowerShell)
+│   ├── build.ps1               # Production build script (PowerShell)
+│   ├── gen_ico.go              # Multi-size ICO generator (from PNG)
+│   └── Clear-IconCache.ps1     # Helper: clear Windows icon cache
 ├── build\
 │   ├── appicon.png
 │   └── windows\
@@ -156,9 +157,10 @@ All steps run on `windows-latest`. Release name format: `KeyStats <tag>`.
 To cut a release:
 ```cmd
 :: 1. Bump version in wails.json
-:: 2. Write release notes: docs\releases\v1.0.1.md
-:: 3. Tag and push
-git tag v1.0.1
+:: 2. Write release notes: docs\releases\v1.0.2.md
+:: 3. Commit and push
+:: 4. Tag and push
+git tag v1.0.2
 git push --tags
 ```
 
@@ -167,6 +169,5 @@ git push --tags
 | Resource | Path |
 |----------|------|
 | SQLite DB | `%APPDATA%\key-stats\data.db` |
-| Window size | `%APPDATA%\key-stats\config.json` |
 | .env config | Next to executable (portable mode) or `%APPDATA%\key-stats\.env` |
 | Release notes | `docs\releases\v<version>.md` |

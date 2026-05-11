@@ -2,6 +2,7 @@ package stats
 
 import (
 	"database/sql"
+	"fmt"
 	"key-stats/internal/models"
 	"sort"
 )
@@ -79,24 +80,55 @@ func VKToName(vk int) string {
 	if vk >= 96 && vk <= 105 {
 		return string(rune('0' + (vk - 96)))
 	}
+	// F1-F24
+	if vk >= 112 && vk <= 135 {
+		return fmt.Sprintf("F%d", vk-111)
+	}
 	// Common keys
 	switch vk {
 	case 32:  return "Space"
 	case 13:  return "Enter"
 	case 8:   return "Back"
-	case 16:  return "Shift"
-	case 17:  return "Ctrl"
-	case 18:  return "Alt"
 	case 9:   return "Tab"
 	case 27:  return "Esc"
 	case 20:  return "Caps"
 	case 91:  return "Win"
 	case 92:  return "Win"
+	case 93:  return "Menu"
+	case 95:  return "Sleep"
+	// Modifiers — left/right variants
+	case 160: return "LShift"
+	case 161: return "RShift"
+	case 162: return "LCtrl"
+	case 163: return "RCtrl"
+	case 164: return "LAlt"
+	case 165: return "RAlt"
+	case 16:  return "Shift"
+	case 17:  return "Ctrl"
+	case 18:  return "Alt"
+	// Navigation
+	case 33:  return "PgUp"
+	case 34:  return "PgDn"
+	case 35:  return "End"
+	case 36:  return "Home"
+	case 37:  return "Left"
+	case 38:  return "Up"
+	case 39:  return "Right"
+	case 40:  return "Down"
+	case 45:  return "Insert"
+	case 46:  return "Delete"
+	case 44:  return "PrtSc"
+	case 19:  return "Pause"
+	case 145: return "ScrLk"
+	case 144: return "NumLk"
+	// Numpad operators
 	case 106: return "*"
 	case 107: return "+"
 	case 109: return "-"
 	case 110: return "."
 	case 111: return "/"
+	case 12:  return "Clear"
+	// Main keyboard symbols
 	case 187: return "="
 	case 189: return "-"
 	case 190: return "."
@@ -108,6 +140,26 @@ func VKToName(vk int) string {
 	case 220: return "\\"
 	case 221: return "]"
 	case 222: return "'"
+	case 223: return "`"
+	// Media / Browser
+	case 166: return "BrwBack"
+	case 167: return "BrwFwd"
+	case 168: return "BrwRef"
+	case 169: return "BrwStop"
+	case 170: return "BrwSrch"
+	case 171: return "BrwFav"
+	case 172: return "BrwHome"
+	case 173: return "Mute"
+	case 174: return "VolDn"
+	case 175: return "VolUp"
+	case 176: return "Next"
+	case 177: return "Prev"
+	case 178: return "Stop"
+	case 179: return "Play"
+	case 180: return "Mail"
+	case 181: return "Media"
+	case 182: return "Launch1"
+	case 183: return "Launch2"
 	}
-	return "Key"
+	return fmt.Sprintf("VK_%d", vk)
 }

@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
+	"key-stats/internal/config"
 	"key-stats/internal/db"
 	"key-stats/internal/models"
 	"key-stats/internal/service"
 	"key-stats/internal/stats"
 	"key-stats/pkg/tray"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
@@ -42,7 +44,13 @@ func (a *App) Startup(ctx context.Context) {
 	a.keyboard = service.NewKeyboardService(d)
 	a.keyboard.Start()
 
-	// 3. Start system tray
+	// 3. Restore window size from config
+	cfg, _ := config.Load()
+	if cfg != nil && cfg.Window.Width > 0 && cfg.Window.Height > 0 {
+		runtime.WindowSetSize(ctx, cfg.Window.Width, cfg.Window.Height)
+	}
+
+	// 4. Start system tray
 	a.trayMgr.Run(ctx,
 		func() { tray.ShowWindow(ctx) },
 		func() { tray.QuitApp(ctx) },
@@ -52,6 +60,13 @@ func (a *App) Startup(ctx context.Context) {
 // Shutdown is called when the app is closing.
 func (a *App) Shutdown(ctx context.Context) {
 	fmt.Println("App is shutting down...")
+
+	// Save window size
+	if a.ctx != nil {
+		w, h := runtime.WindowGetSize(a.ctx)
+		_ = config.Save(&config.Config{Window: config.WindowState{Width: w, Height: h}})
+	}
+
 	if a.trayMgr != nil {
 		a.trayMgr.Quit()
 	}
@@ -61,6 +76,22 @@ func (a *App) Shutdown(ctx context.Context) {
 	if a.database != nil {
 		a.database.Close()
 	}
+}
+
+// GetWindowSize returns the saved window dimensions.
+func (a *App) GetWindowSize() (config.WindowState, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return config.WindowState{}, err
+	}
+	return cfg.Window, nil
+}
+
+// SaveWindowSize persists the current window dimensions.
+func (a *App) SaveWindowSize(width, height int) error {
+	return config.Save(&config.Config{
+		Window: config.WindowState{Width: width, Height: height},
+	})
 }
 
 // -- API Contract --

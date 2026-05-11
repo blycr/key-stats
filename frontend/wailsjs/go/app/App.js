@@ -10,8 +10,16 @@ export function GetTodayStats() {
   return window['go']['app']['App']['GetTodayStats']();
 }
 
+export function GetWindowSize() {
+  return window['go']['app']['App']['GetWindowSize']();
+}
+
 export function ResetStats() {
   return window['go']['app']['App']['ResetStats']();
+}
+
+export function SaveWindowSize(arg1, arg2) {
+  return window['go']['app']['App']['SaveWindowSize'](arg1, arg2);
 }
 
 export function StartDrag() {

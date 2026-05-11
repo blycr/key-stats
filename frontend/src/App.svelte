@@ -1,6 +1,7 @@
 <script>
     import { onMount } from 'svelte';
     import KeyboardMap from './components/KeyboardMap.svelte';
+    import Modal from './components/Modal.svelte';
     import { WindowHide, Quit } from '../wailsjs/runtime/runtime.js';
 
     // 默认空数据结构
@@ -14,6 +15,25 @@
     let showMenu = false;
     let menuPos = { x: 0, y: 0 };
     let menuMode = 'dropdown'; // 'dropdown' | 'context'
+
+    // Modal 状态
+    let modalShow = false;
+    let modalTitle = '';
+    let modalMessage = '';
+    let modalMode = 'info';
+    let modalConfirmText = '确定';
+    let modalCancelText = '取消';
+    let modalOnConfirm = () => {};
+
+    function openModal({ title, message, mode = 'info', confirmText = '确定', cancelText = '取消', onConfirm = () => {} }) {
+        modalTitle = title;
+        modalMessage = message;
+        modalMode = mode;
+        modalConfirmText = confirmText;
+        modalCancelText = cancelText;
+        modalOnConfirm = onConfirm;
+        modalShow = true;
+    }
 
     // 假设 Wails 已经绑定了后端的方法 window.go.app.App.GetTodayStats
     async function fetchLiveStats() {
@@ -44,28 +64,41 @@
         }
     }
 
-    async function resetStats() {
-        if (!confirm('确定要重置所有记录吗？此操作不可恢复。')) {
-            closeMenu();
-            return;
-        }
-        if (window.go?.app?.App?.ResetStats) {
-            try {
-                await window.go.app.App.ResetStats();
-                // 立即刷新数据，显示清空后的状态
-                await fetchLiveStats();
-            } catch (e) {
-                console.error("Failed to reset stats:", e);
-                alert('重置失败: ' + e.message);
-            }
-        }
+    function resetStats() {
         closeMenu();
+        openModal({
+            title: '重置记录',
+            message: '确定要重置所有记录吗？\n此操作不可恢复。',
+            mode: 'confirm',
+            confirmText: '重置',
+            cancelText: '取消',
+            onConfirm: async () => {
+                if (window.go?.app?.App?.ResetStats) {
+                    try {
+                        await window.go.app.App.ResetStats();
+                        await fetchLiveStats();
+                    } catch (e) {
+                        console.error("Failed to reset stats:", e);
+                        openModal({
+                            title: '操作失败',
+                            message: '重置记录时出错：' + (e.message || '未知错误'),
+                            mode: 'info'
+                        });
+                    }
+                }
+            }
+        });
     }
 
     function showStatus() {
-        const total = statsData.totalKeys.toLocaleString();
-        alert(`KeyStats 状态\n\n今日按键数: ${total}\n记录状态: ${isLive ? '实时记录中' : '已暂停'}`);
         closeMenu();
+        const total = statsData.totalKeys.toLocaleString();
+        openModal({
+            title: '状态信息',
+            message: `今日按键数: ${total}\n记录状态: ${isLive ? '实时记录中' : '已暂停'}`,
+            mode: 'info',
+            confirmText: '好的'
+        });
     }
 
     function minimizeApp() {
@@ -75,13 +108,17 @@
 
     function quitApp() {
         closeMenu();
-        // Quit 会触发 OnShutdown，自动 flush DB + 停钩子
         Quit();
     }
 
     function openSettings() {
-        alert('设置功能即将上线');
         closeMenu();
+        openModal({
+            title: '设置',
+            message: '设置功能即将上线，敬请期待。',
+            mode: 'info',
+            confirmText: '好的'
+        });
     }
 
     function toggleMenu(mode, e) {
@@ -102,7 +139,6 @@
 
     onMount(() => {
         fetchLiveStats();
-        // 配合后端 500ms 批量写入，前端 500ms 轮询以降低延迟
         const interval = setInterval(() => {
             if (isLive) fetchLiveStats();
         }, 500);
@@ -253,10 +289,21 @@
             </div>
         </div>
         
-        <!-- 背景装饰光晕 -->
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-accent/5 rounded-full blur-[120px] pointer-events-none z-0"></div>
-    </div>
+    <!-- 背景装饰光晕 -->
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-accent/5 rounded-full blur-[120px] pointer-events-none z-0"></div>
 </main>
+
+<!-- 全局弹窗 -->
+<Modal
+    bind:show={modalShow}
+    title={modalTitle}
+    message={modalMessage}
+    mode={modalMode}
+    confirmText={modalConfirmText}
+    cancelText={modalCancelText}
+    on:confirm={modalOnConfirm}
+    on:cancel={() => modalShow = false}
+/>
 
 <style>
     /* 全局隐藏滚动条，保持滚动功能 */

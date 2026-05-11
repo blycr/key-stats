@@ -53,16 +53,13 @@ func envPath() string {
 }
 
 // DataDir returns the directory for SQLite and other data files.
-// If portable mode is active, it returns the executable's directory.
+// Portable mode is auto-detected by checking whether .env lives next to the executable.
 func DataDir() (string, error) {
-	cfg, err := Load()
-	if err != nil {
-		return "", err
-	}
-	if cfg.PortableMode {
-		exe, err := os.Executable()
-		if err == nil {
-			return filepath.Dir(exe), nil
+	exe, err := os.Executable()
+	if err == nil {
+		portableDir := filepath.Dir(exe)
+		if _, err := os.Stat(filepath.Join(portableDir, ".env")); err == nil {
+			return portableDir, nil
 		}
 	}
 	dir, _ := os.UserConfigDir()
@@ -124,24 +121,24 @@ func Save(cfg *AppConfig) error {
 
 	content := fmt.Sprintf(`# KeyStats Configuration
 # ======================
-# Edit values below or uncomment lines to customize.
+# Edit values below to customize.
 # Changes take effect on next launch (some may require restart).
 
 # Window Size (last known dimensions)
 WINDOW_WIDTH=%d
 WINDOW_HEIGHT=%d
 
-# Appearance
-# THEME=%s         # dark | light | auto
+# Appearance — dark | light | auto
+THEME=%s
 
 # Behavior
-# START_MINIMIZED=false    # Start minimized to system tray
-# AUTO_START=false         # Launch on system startup
+START_MINIMIZED=%t
+AUTO_START=%t
 
-# Data Storage
-# PORTABLE_MODE=false      # If true, .env and data.db live next to the executable.
-#                          # To enable portable mode: copy this .env file next to key-stats.exe
-`, cfg.WindowWidth, cfg.WindowHeight, cfg.Theme)
+# Data Storage (read-only — detected automatically by .env location)
+# PORTABLE_MODE=false
+# To enable portable mode: copy this .env file next to key-stats.exe
+`, cfg.WindowWidth, cfg.WindowHeight, cfg.Theme, cfg.StartMinimized, cfg.AutoStart)
 
 	return os.WriteFile(path, []byte(content), 0644)
 }

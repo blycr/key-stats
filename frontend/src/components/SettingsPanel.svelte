@@ -80,11 +80,17 @@
                         <div class="text-xs text-text-primary">Theme</div>
                         <div class="text-[10px] text-text-tertiary">Interface color scheme</div>
                     </div>
-                    <select bind:value={settings.theme} class="bg-surface-overlay/60 border border-surface-overlay text-text-primary text-xs rounded-lg px-3 py-1.5 outline-none focus:border-accent transition-colors">
-                        <option value="dark">Dark</option>
-                        <option value="light">Light</option>
-                        <option value="auto">Auto</option>
-                    </select>
+                    <div class="relative">
+                        <select bind:value={settings.theme} class="appearance-none bg-surface-overlay/60 border border-surface-overlay text-text-primary text-xs rounded-lg px-3 py-1.5 pr-8 outline-none focus:border-accent transition-colors cursor-pointer min-w-[100px]">
+                            <option value="dark">Dark</option>
+                            <option value="light">Light</option>
+                            <option value="auto">Auto</option>
+                        </select>
+                        <!-- 自定义下拉箭头 -->
+                        <svg class="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
                 </div>
 
                 <!-- Start Minimized -->

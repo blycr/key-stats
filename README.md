@@ -89,6 +89,22 @@ wails build -s
 go build -ldflags="-s -w" -o build/bin/key-stats.exe .
 ```
 
+## Release
+
+Releases are built automatically by GitHub Actions when a version tag is pushed.
+
+```bash
+# 1. Bump version in wails.json
+# 2. Write release notes: docs/releases/v1.0.1.md
+# 3. Tag and push
+git tag v1.0.1
+git push --tags
+```
+
+The CI workflow compiles `key-stats.exe` and publishes it on the [Releases](https://github.com/blycr/key-stats/releases) page.
+
+---
+
 The `wails.json` is already configured to use `bun`:
 
 ```json

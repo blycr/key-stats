@@ -2,8 +2,8 @@ name: Build & Release
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v*"
 
 permissions:
   contents: write
@@ -34,40 +34,20 @@ jobs:
       - name: Compile with stripped symbols
         run: go build -ldflags="-s -w" -o build/bin/key-stats.exe .
 
-      - name: Read version
-        id: version
-        shell: pwsh
-        run: |
-          $ver = (Get-Content wails.json | ConvertFrom-Json).info.productVersion
-          echo "value=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
       - name: Read release notes
         id: notes
         shell: pwsh
         run: |
-          $ver = "${{ steps.version.outputs.value }}"
-          $file = "docs/releases/v${ver}.md"
+          $tag = "${{ github.ref_name }}"
+          $file = "docs/releases/${tag}.md"
           if (Test-Path $file) {
             echo "path=$file" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           }
 
-      - name: Delete old tag & release (if exists)
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = "v${{ steps.version.outputs.value }}"
-          $repo = "${{ github.repository }}"
-          try {
-            $rel = gh release view $tag --json tagName 2>$null | ConvertFrom-Json
-            if ($rel) { gh release delete $tag --cleanup-tag --yes }
-          } catch {}
-          try { git push origin :refs/tags/$tag 2>$null } catch {}
-
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ steps.version.outputs.value }}"
-          name: "KeyStats v${{ steps.version.outputs.value }}"
+          tag_name: ${{ github.ref_name }}
+          name: "KeyStats ${{ github.ref_name }}"
           body_path: ${{ steps.notes.outputs.path }}
           files: build/bin/key-stats.exe

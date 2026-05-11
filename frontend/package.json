@@ -4,9 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "dev": "bun run patch:wails && vite",
+    "build": "vite build && bun run patch:wails",
+    "preview": "vite preview",
+    "patch:wails": "node -e \"const fs=require('fs'),f='wailsjs/go/app/App.js';if(fs.existsSync(f)){let c=fs.readFileSync(f,'utf8');if(c.includes('@ts-check')){fs.writeFileSync(f,c.replace('// @ts-check','// @ts-nocheck'));console.log('Patched '+f);}}\""
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^3.0.2",

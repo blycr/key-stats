@@ -28,8 +28,8 @@ export default {
         danger: '#FF453A',
       },
       fontFamily: {
-        sans: ['"Inter"', 'system-ui', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'monospace'],
+        sans: ['var(--app-font)', '"JetBrains Mono"', '"Fira Code"', '"Cascadia Code"', '"Consolas"', 'monospace'],
+        mono: ['var(--app-font)', '"JetBrains Mono"', '"Fira Code"', '"Cascadia Code"', '"Consolas"', 'monospace'],
       },
       borderRadius: {
         card: '12px',

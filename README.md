@@ -7,11 +7,13 @@ Real-time keyboard usage tracker for Windows. Beautiful, minimal, and stays out 
 ## Features
 
 - **Global keystroke capture** — low-level Windows hook (`WH_KEYBOARD_LL`), works across all apps
-- **Live dashboard** — today's total, top 10 keys ranking, interactive QWERTY heatmap
+- **Live dashboard** — total keystrokes, top 10 keys ranking, interactive QWERTY heatmap
+- **Date range stats** — switch between Today, Yesterday, Last 7 Days, and Last 30 Days
 - **System tray** — minimize to tray, show/quit from tray menu
 - **Elegant menus** — `⋯` dropdown + top-bar right-click context menu
 - **Persistent window size** — remembers your last resized dimensions
 - **Custom modal dialogs** — dark glassmorphism alerts that match the app theme
+- **Font configuration** — choose any installed monospace font from Settings (reads system fonts automatically)
 - **Reset stats** — one-click clear all records with confirmation
 - **Comprehensive key mapping** — F1-F24, arrows, media keys, Fn, L/R modifiers, and more
 - **Zero-config storage** — SQLite with WAL mode at `%APPDATA%/key-stats/data.db`
@@ -35,7 +37,9 @@ key-stats/
 ├── wails.json                 # Wails config (bun scripts)
 ├── go.mod / go.sum
 ├── scripts/
-│   └── build.cmd              # Production build script
+│   ├── build.ps1              # Production build script (PowerShell)
+│   ├── gen_ico.go             # Multi-size ICO generator
+│   └── Clear-IconCache.ps1    # Clear Windows icon cache
 ├── build/
 │   ├── appicon.png
 │   └── windows/
@@ -84,7 +88,7 @@ key-stats/
 wails dev
 
 :: Build production binary
-scripts\build.cmd
+scripts\build.ps1
 
 :: Or manually:
 wails build -s

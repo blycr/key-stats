@@ -27,6 +27,9 @@
     let modalOnConfirm = () => {};
 
     let showSettingsPanel = false;
+    let showDateDropdown = false;
+    let dateRange = 'Today';
+    let daysAgo = 0;
 
     function openModal({ title, message, mode = 'info', confirmText = 'OK', cancelText = 'Cancel', onConfirm = () => {} }) {
         modalTitle = title;
@@ -63,13 +66,34 @@
             return;
         }
         try {
-            const data = await window.go.app.App.GetTodayStats();
+            let data;
+            if (daysAgo === 0) {
+                data = await window.go.app.App.GetTodayStats();
+            } else if (window.go?.app?.App?.GetStats) {
+                data = await window.go.app.App.GetStats(daysAgo);
+            } else {
+                data = await window.go.app.App.GetTodayStats();
+            }
             if (data && data.status !== 'not implemented') {
                  statsData = data;
             }
         } catch (e) {
             console.error("Failed to fetch stats:", e);
         }
+    }
+
+    const dateOptions = [
+        { label: 'Today', days: 0 },
+        { label: 'Yesterday', days: 1 },
+        { label: 'Last 7 Days', days: 7 },
+        { label: 'Last 30 Days', days: 30 },
+    ];
+
+    function selectDateRange(option) {
+        dateRange = option.label;
+        daysAgo = option.days;
+        showDateDropdown = false;
+        fetchLiveStats();
     }
 
     function resetStats() {
@@ -155,6 +179,9 @@
         if (showMenu && !e.target.closest('[data-menu]')) {
             closeMenu();
         }
+        if (showDateDropdown && !e.target.closest('.date-dropdown-wrapper')) {
+            showDateDropdown = false;
+        }
     }
 
     function handleMainKeydown(e) {
@@ -170,6 +197,15 @@
     }
 
     onMount(() => {
+        // Load and apply saved font
+        if (window.go?.app?.App?.GetConfig) {
+            window.go.app.App.GetConfig().then(cfg => {
+                if (cfg?.fontFamily) {
+                    document.documentElement.style.setProperty('--app-font', `"${cfg.fontFamily}", "JetBrains Mono", monospace`);
+                }
+            }).catch(() => {});
+        }
+
         fetchLiveStats();
         const interval = setInterval(() => {
             if (isLive) fetchLiveStats();
@@ -199,7 +235,7 @@
 </script>
 
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-<main class="w-screen h-screen flex flex-col bg-surface text-text-primary overflow-hidden selection:bg-accent/30 font-sans relative" on:click={handleMainClick} on:keydown={handleMainKeydown} role="application">
+<main class="w-screen h-screen flex flex-col bg-surface text-text-primary overflow-hidden selection:bg-accent/30 font-mono relative" on:click={handleMainClick} on:keydown={handleMainKeydown} role="application">
     
     <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
     <!-- Title bar — on mousedown calls Go StartDrag for frameless window drag -->
@@ -216,9 +252,25 @@
         </div>
         
         <div class="flex items-center gap-4">
-            <button class="px-3 py-1.5 text-xs font-medium bg-surface-overlay/60 rounded-md hover:bg-surface-overlay transition-colors border border-surface-overlay">
-                Today ▾
-            </button>
+            <div class="relative date-dropdown-wrapper">
+                <button class="px-3 py-1.5 text-xs font-medium bg-surface-overlay/60 rounded-md hover:bg-surface-overlay transition-colors border border-surface-overlay flex items-center gap-1"
+                    on:click|stopPropagation={() => showDateDropdown = !showDateDropdown}>
+                    {dateRange}
+                    <svg class="w-3 h-3 text-text-tertiary transition-transform duration-200 {showDateDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                {#if showDateDropdown}
+                <div class="absolute right-0 top-full mt-1 w-36 bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden z-[300] animate-menu">
+                    {#each dateOptions as opt}
+                    <button class="w-full px-3 py-2 text-xs text-left transition-colors {dateRange === opt.label ? 'text-text-primary bg-surface-overlay/40' : 'text-text-secondary hover:text-text-primary hover:bg-surface-overlay/30'}"
+                        on:click|stopPropagation={() => selectDateRange(opt)}>
+                        {opt.label}
+                    </button>
+                    {/each}
+                </div>
+                {/if}
+            </div>
             <button 
                 class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-300 border {isLive ? 'text-success bg-success/10 border-success/20' : 'text-text-secondary bg-surface-overlay/30 border-surface-overlay'}"
                 on:click={() => isLive = !isLive}
@@ -287,7 +339,7 @@
                 <h2 class="text-[10px] font-bold text-text-tertiary tracking-widest uppercase mb-1">Today's Keystrokes</h2>
                 <div class="text-4xl font-mono text-white font-light flex items-baseline gap-2">
                     {statsData.totalKeys.toLocaleString()}
-                    <span class="text-xs font-sans text-accent font-medium tracking-wide">KEYS</span>
+                    <span class="text-xs font-mono text-accent font-medium tracking-wide">KEYS</span>
                 </div>
             </div>
 

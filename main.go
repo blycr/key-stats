@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"log"
 
@@ -46,6 +47,7 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 28, G: 28, B: 30, A: 1},
 		OnStartup:        application.Startup,
+		OnDomReady:       func(ctx context.Context) { application.SetWindowIcon() },
 		OnShutdown:       application.Shutdown,
 		Frameless:        true,
 		Windows: &windows.Options{

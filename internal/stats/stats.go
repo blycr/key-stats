@@ -7,26 +7,35 @@ import (
 	"sort"
 )
 
-func GetTodaySummary(db *sql.DB) (models.TodaySummary, error) {
+func GetStatsSummary(db *sql.DB, daysAgo int) (models.TodaySummary, error) {
 	var summary models.TodaySummary
 	summary.TopKeys = []models.KeyCount{}
 	summary.AppBreakdown = []models.AppCount{}
 
-	// Total Keys Today
-	err := db.QueryRow("SELECT COUNT(*) FROM key_events WHERE date(timestamp/1000, 'unixepoch') = date('now')").Scan(&summary.TotalKeys)
+	var dateFilter string
+	if daysAgo == 0 {
+		dateFilter = "date(timestamp/1000, 'unixepoch') = date('now')"
+	} else {
+		dateFilter = fmt.Sprintf("date(timestamp/1000, 'unixepoch') = date('now', '-%d day')", daysAgo)
+	}
+
+	// Total Keys
+	query := fmt.Sprintf("SELECT COUNT(*) FROM key_events WHERE %s", dateFilter)
+	err := db.QueryRow(query).Scan(&summary.TotalKeys)
 	if err != nil {
 		return summary, err
 	}
 
-	// Top 10 Keys Today — aggregate by key_name so numpad and main keys merge
-	rows, err := db.Query(`
+	// Top Keys
+	query = fmt.Sprintf(`
 		SELECT key_code, COUNT(*) as count 
 		FROM key_events 
-		WHERE date(timestamp/1000, 'unixepoch') = date('now')
+		WHERE %s
 		GROUP BY key_code 
 		ORDER BY count DESC 
 		LIMIT 50
-	`)
+	`, dateFilter)
+	rows, err := db.Query(query)
 	if err != nil {
 		return summary, err
 	}
@@ -42,7 +51,6 @@ func GetTodaySummary(db *sql.DB) (models.TodaySummary, error) {
 		nameCount[name] += kc.Count
 	}
 
-	// Convert map to slice and sort by count (desc), then name (asc) for stable ordering
 	type pair struct {
 		name  string
 		count int
@@ -65,6 +73,11 @@ func GetTodaySummary(db *sql.DB) (models.TodaySummary, error) {
 	}
 
 	return summary, nil
+}
+
+// GetTodaySummary delegates to GetStatsSummary with daysAgo=0 for backward compatibility.
+func GetTodaySummary(db *sql.DB) (models.TodaySummary, error) {
+	return GetStatsSummary(db, 0)
 }
 
 func VKToName(vk int) string {

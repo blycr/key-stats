@@ -4,20 +4,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Run
 
+### Dev mode
 ```cmd
-:: Dev mode (hot-reload, uses bun for frontend)
+:: Hot-reload frontend + Go backend
 wails dev
+```
 
-:: Production build -> build\bin\key-stats.exe
-scripts\build.cmd
+### Production build
+```cmd
+:: Full clean + rebuild -> build\bin\key-stats.exe
+:: Steps: deep clean -> bun install -> vite build -> wails bindings -> TS patch -> rsrc -> go build
+scripts\build.ps1
+```
 
-:: Or manually (wails doesn't embed icon or propagate ldflags correctly):
+### Manual steps (only if debugging the build itself)
+```cmd
+:: 1. Clean
+if exist rsrc_windows_amd64.syso del rsrc_windows_amd64.syso
+if exist frontend\dist rmdir /s /q frontend\dist
+if exist frontend\wailsjs rmdir /s /q frontend\wailsjs
+if exist build\bin rmdir /s /q build\bin
+
+:: 2. Frontend
+cd frontend && bun install && bun run build && cd ..
+
+:: 3. Wails bindings + intermediate compile
 wails build -s
-go run github.com/akavel/rsrc@latest -ico build\windows\icon.ico -o rsrc_windows_amd64.syso
-go build -tags "desktop,production" -trimpath -ldflags="-H windowsgui -s -w" -o build\bin\key-stats.exe .
 
-:: Frontend only (rarely needed standalone)
-cd frontend && bun run build
+:: 4. Patch generated TS bindings
+cd frontend && bun run patch:wails && cd ..
+
+:: 5. Icon resource
+if exist rsrc_windows_amd64.syso del rsrc_windows_amd64.syso
+go run github.com/akavel/rsrc@latest -ico build\windows\icon.ico -o rsrc_windows_amd64.syso
+
+:: 6. Final stripped binary
+go build -tags "desktop,production" -trimpath -ldflags="-H windowsgui -s -w" -o build\bin\key-stats.exe .
 ```
 
 Prerequisites: Go 1.24+, Bun, Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`), Windows 10/11.
@@ -30,7 +52,7 @@ key-stats\
 ├── wails.json                  # Wails config (bun scripts)
 ├── go.mod / go.sum
 ├── scripts\
-│   └── build.cmd               # Production build script
+│   └── build.ps1               # Production build script (PowerShell)
 ├── build\
 │   ├── appicon.png
 │   └── windows\
@@ -95,9 +117,30 @@ Wails v2 desktop app. Go backend embedded in a WebView2 (Chromium) renderer. Fra
 
 **SQLite:** Uses `modernc.org/sqlite` (pure Go, no CGO). WAL mode enabled. Data at `%APPDATA%\key-stats\data.db`.
 
-**Config:** `.env`-based config via `internal\config`. Supports `PORTABLE_MODE`, `START_MINIMIZED`, `AUTO_START`, `THEME`, `WINDOW_WIDTH`, `WINDOW_HEIGHT`.
+**Config:** `.env`-based config via `internal\config`. Supports `PORTABLE_MODE`, `START_MINIMIZED`, `AUTO_START`, `THEME`, `FONT_FAMILY`, `WINDOW_WIDTH`, `WINDOW_HEIGHT`.
 
 **System tray:** `pkg\tray\tray_windows.go` uses `getlantern/systray`. Must call `Quit()` on shutdown before closing DB.
+
+## Build Gotchas
+
+**`frontend/dist` must exist before `wails build -s`:** `wails build -s` skips the frontend Vite build but still embeds `frontend/dist` into the Go binary via `//go:embed`. If `dist` is empty (e.g., only `.gitkeep`), the produced EXE crashes immediately on startup with no visible error because `-H windowsgui -s -w` suppresses the console. The build script therefore runs `bun run build` manually before `wails build -s`.
+
+**`.syso` file must be deleted before every build:** `rsrc` generates `rsrc_windows_amd64.syso`. Go automatically picks up `.syso` files in the package directory. If an old `.syso` is present, the linker fails with `too many .rsrc sections`. The build script deletes it at the start, regenerates it before the final `go build`, and deletes it again at the end.
+
+**Never export unused Go methods bound to Wails JS:** `pkg/app/app.go` previously exported `Ctx() context.Context`. Wails auto-generated `frontend/wailsjs/go/app/App.d.ts` with `import {context} from '../models'`, causing a TS 2305 error because no `context` type exists in the frontend models. Removed `Ctx()` from `App` struct and from the generated `.d.ts`.
+
+**Generated `wailsjs/go/app/App.js` has `// @ts-check`:** Wails generates this file with `// @ts-check` on every build, which makes VS Code report TS 7006/7015 errors (implicit any) on `window['go']...` bracket access. Do NOT try to fix this with `jsconfig.json` — the `exclude` option does not suppress file-level `// @ts-check` directives, and adding `jsconfig.json` triggers a separate `moduleResolution=node10` deprecation error. The correct fix is a post-build patch (`patch:wails` in `frontend/package.json`) that replaces `// @ts-check` with `// @ts-nocheck` after every binding generation. The build script runs this patch automatically.
+
+**Do NOT delete `frontend/wailsjs` during clean:** The frontend build (`vite build`) imports `../wailsjs/runtime/runtime.js`. If `wailsjs` is missing, Vite fails with "Could not resolve '../wailsjs/runtime/runtime.js'". The build script therefore only cleans `frontend/dist` and `build/bin`, not `wailsjs`. If `wailsjs` is ever accidentally deleted, run `wails generate module` (requires `frontend/dist` to exist — create an empty dir with `.gitkeep` first).
+
+**Build order matters:**
+1. Deep clean (`.syso`, `frontend/dist`, `build/bin`)
+2. `bun install` + `bun run build` (frontend)
+3. `wails build -s` (bindings + intermediate compile)
+4. `bun run patch:wails` (disable TS strict check)
+5. `rsrc` (icon `.syso`)
+6. `go build` (final stripped binary)
+7. Clean up temp `.syso`
 
 ## Release Workflow
 

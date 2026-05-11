@@ -7,6 +7,7 @@
 
     let settings = {
         theme: 'dark',
+        fontFamily: 'JetBrains Mono',
         startMinimized: false,
         autoStart: false,
         portableMode: false,
@@ -14,6 +15,26 @@
     };
     let saving = false;
     let showThemeDropdown = false;
+    let showFontDropdown = false;
+    let systemFonts = [];
+
+    const presetFonts = [
+        'JetBrains Mono',
+        'Fira Code',
+        'Cascadia Code',
+        'Cascadia Mono',
+        'Source Code Pro',
+        'Consolas',
+        'Monaco',
+        'Menlo',
+        'SF Mono',
+        'DejaVu Sans Mono',
+        'Ubuntu Mono',
+        'IBM Plex Mono',
+        'Space Mono',
+        'Inconsolata',
+        'Courier New'
+    ];
 
     const themeOptions = [
         { value: 'dark', label: 'Dark' },
@@ -27,6 +48,7 @@
             const cfg = await window.go.app.App.GetConfig();
             settings = {
                 theme: cfg.theme || 'dark',
+                fontFamily: cfg.fontFamily || 'JetBrains Mono',
                 startMinimized: cfg.startMinimized || false,
                 autoStart: cfg.autoStart || false,
                 portableMode: cfg.portableMode || false,
@@ -34,6 +56,26 @@
             };
         } catch (e) {
             console.error('Failed to load config:', e);
+        }
+        await loadSystemFonts();
+    }
+
+    async function loadSystemFonts() {
+        if (!window.go?.app?.App?.GetSystemFonts) return;
+        try {
+            const fonts = await window.go.app.App.GetSystemFonts();
+            // Merge with presets, deduplicate
+            const all = [...presetFonts, ...fonts];
+            const seen = new Set();
+            systemFonts = all.filter(f => {
+                const lower = f.toLowerCase();
+                if (seen.has(lower)) return false;
+                seen.add(lower);
+                return true;
+            }).sort();
+        } catch (e) {
+            console.error('Failed to load system fonts:', e);
+            systemFonts = [...presetFonts];
         }
     }
 
@@ -43,16 +85,23 @@
         try {
             const changed = await window.go.app.App.SetConfig({
                 theme: settings.theme,
+                fontFamily: settings.fontFamily,
                 startMinimized: settings.startMinimized,
                 autoStart: settings.autoStart
             });
             console.log('Config updated:', changed);
+            applyFont(settings.fontFamily);
             closePanel();
         } catch (e) {
             console.error('Failed to save config:', e);
         } finally {
             saving = false;
         }
+    }
+
+    function applyFont(font) {
+        if (!font) return;
+        document.documentElement.style.setProperty('--app-font', `"${font}", "JetBrains Mono", monospace`);
     }
 
     function closePanel() {
@@ -75,6 +124,10 @@
         if (showThemeDropdown) {
             const dropdown = e.target.closest('.theme-dropdown-wrapper');
             if (!dropdown) showThemeDropdown = false;
+        }
+        if (showFontDropdown) {
+            const dropdown = e.target.closest('.font-dropdown-wrapper');
+            if (!dropdown) showFontDropdown = false;
         }
     }
 
@@ -105,7 +158,7 @@
                     <div class="relative theme-dropdown-wrapper">
                         <button
                             class="min-w-[100px] flex items-center justify-between gap-2 bg-surface-overlay/60 border border-surface-overlay text-text-primary text-xs rounded-lg px-3 py-1.5 outline-none focus:border-accent transition-colors cursor-pointer"
-                            on:click|stopPropagation={() => showThemeDropdown = !showThemeDropdown}
+                            on:click|stopPropagation={() => { showThemeDropdown = !showThemeDropdown; showFontDropdown = false; }}
                         >
                             <span>{themeOptions.find(o => o.value === settings.theme)?.label || settings.theme}</span>
                             <svg class="w-3.5 h-3.5 text-text-tertiary transition-transform duration-200 {showThemeDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -121,6 +174,40 @@
                                 on:click|stopPropagation={() => selectTheme(opt.value)}
                             >
                                 {opt.label}
+                            </button>
+                            {/each}
+                        </div>
+                        {/if}
+                    </div>
+                </div>
+
+                <!-- Font Family -->
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-xs text-text-primary">Font</div>
+                        <div class="text-[10px] text-text-tertiary">Interface & code font</div>
+                    </div>
+                    <div class="relative font-dropdown-wrapper">
+                        <button
+                            class="min-w-[140px] flex items-center justify-between gap-2 bg-surface-overlay/60 border border-surface-overlay text-text-primary text-xs rounded-lg px-3 py-1.5 outline-none focus:border-accent transition-colors cursor-pointer"
+                            style="font-family: '{settings.fontFamily || 'JetBrains Mono'}', monospace;"
+                            on:click|stopPropagation={() => { showFontDropdown = !showFontDropdown; showThemeDropdown = false; }}
+                        >
+                            <span>{settings.fontFamily || 'JetBrains Mono'}</span>
+                            <svg class="w-3.5 h-3.5 text-text-tertiary transition-transform duration-200 {showFontDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+
+                        {#if showFontDropdown}
+                        <div class="absolute right-0 top-full mt-1 w-[200px] max-h-[240px] overflow-y-auto bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] z-[300] animate-dropdown-in custom-scrollbar">
+                            {#each systemFonts as font}
+                            <button
+                                class="w-full px-3 py-2 text-xs text-left transition-colors {settings.fontFamily === font ? 'text-text-primary bg-surface-overlay/40' : 'text-text-secondary hover:text-text-primary hover:bg-surface-overlay/30'}"
+                                style="font-family: '{font}', monospace;"
+                                on:click|stopPropagation={() => { settings.fontFamily = font; showFontDropdown = false; }}
+                            >
+                                {font}
                             </button>
                             {/each}
                         </div>
@@ -204,5 +291,18 @@
     }
     .animate-dropdown-in {
         animation: dropdownIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.15);
+        border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(255,255,255,0.25);
     }
 </style>

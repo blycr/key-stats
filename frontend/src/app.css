@@ -2,8 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --app-font: "JetBrains Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
+}
+
 body {
-  @apply bg-surface text-text-primary font-sans;
+  @apply bg-surface text-text-primary;
+  font-family: var(--app-font);
   user-select: none;
   margin: 0;
   overflow: hidden;

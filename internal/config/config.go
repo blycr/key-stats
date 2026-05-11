@@ -16,7 +16,8 @@ type AppConfig struct {
 	WindowHeight int
 
 	// Appearance
-	Theme string
+	Theme      string
+	FontFamily string
 
 	// Behavior
 	StartMinimized bool
@@ -32,6 +33,7 @@ func defaults() *AppConfig {
 		WindowWidth:    1280,
 		WindowHeight:   800,
 		Theme:          "dark",
+		FontFamily:     "JetBrains Mono",
 		StartMinimized: false,
 		AutoStart:      false,
 		PortableMode:   false,
@@ -106,6 +108,8 @@ func Load() (*AppConfig, error) {
 			}
 		case "THEME":
 			cfg.Theme = val
+		case "FONT_FAMILY":
+			cfg.FontFamily = val
 		case "START_MINIMIZED":
 			cfg.StartMinimized = parseBool(val)
 		case "AUTO_START":
@@ -137,6 +141,9 @@ WINDOW_HEIGHT=%d
 # Appearance — dark | light | auto
 THEME=%s
 
+# Font Family
+FONT_FAMILY=%s
+
 # Behavior
 START_MINIMIZED=%t
 AUTO_START=%t
@@ -144,7 +151,7 @@ AUTO_START=%t
 # Data Storage (read-only — detected automatically by .env location)
 # PORTABLE_MODE=false
 # To enable portable mode: copy this .env file next to key-stats.exe
-`, cfg.WindowWidth, cfg.WindowHeight, cfg.Theme, cfg.StartMinimized, cfg.AutoStart)
+`, cfg.WindowWidth, cfg.WindowHeight, cfg.Theme, cfg.FontFamily, cfg.StartMinimized, cfg.AutoStart)
 
 	return os.WriteFile(path, []byte(content), 0644)
 }
@@ -156,6 +163,7 @@ func (c *AppConfig) ToMap() map[string]interface{} {
 		"windowWidth":    c.WindowWidth,
 		"windowHeight":   c.WindowHeight,
 		"theme":          c.Theme,
+		"fontFamily":     c.FontFamily,
 		"startMinimized": c.StartMinimized,
 		"autoStart":      c.AutoStart,
 		"portableMode":   c.PortableMode,
@@ -182,6 +190,12 @@ func (c *AppConfig) UpdateFromMap(m map[string]interface{}) []string {
 		if s, ok := v.(string); ok {
 			c.Theme = s
 			changed = append(changed, "theme")
+		}
+	}
+	if v, ok := m["fontFamily"]; ok {
+		if s, ok := v.(string); ok {
+			c.FontFamily = s
+			changed = append(changed, "fontFamily")
 		}
 	}
 	if v, ok := m["startMinimized"]; ok {

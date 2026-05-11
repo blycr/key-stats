@@ -18,5 +18,20 @@ Thumbs.db
 *.db-wal
 *.db-shm
 
+# Environment / secrets
+.env
+.env.local
+
+# Vite / Svelte temp files
+frontend/vite.config.js.timestamp-*.mjs
+
+# Coverage / test artifacts
+coverage/
+*.test-results.*
+
+# Temporary files
+*.tmp
+*.temp
+
 # Logs
 *.log

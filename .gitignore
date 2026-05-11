@@ -5,9 +5,10 @@ frontend/dist/
 # Dependencies
 frontend/node_modules/
 
-# IDE
+# IDE / Tools
 .vscode/
 .idea/
+.claude/
 
 # OS
 .DS_Store

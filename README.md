@@ -1,91 +1,102 @@
 # KeyStats
 
-Windows desktop app that tracks and visualizes your keyboard usage in real time.
+Real-time keyboard usage tracker for Windows. Beautiful, minimal, and stays out of your way.
 
-Built with [Wails v2](https://wails.io/) (Go backend + Svelte frontend), using a Win32 low-level keyboard hook and SQLite for storage.
+![screenshot](https://user-images.githubusercontent.com/placeholder/key-stats.png)
 
 ## Features
 
-- **Real-time keystroke logging** — global `WH_KEYBOARD_LL` hook captures every keypress across all applications
-- **Keyboard heatmap** — QWERTY layout with color intensity reflecting relative key frequency
-- **Top keys ranking** — bar chart of your most-pressed keys today
-- **Live polling** — UI refreshes every **500 ms** while the window is focused
-- **Batch persistence** — events are buffered in a channel (cap 4096) and flushed to SQLite every **500 ms** or at 256 events
-- **Zero-config storage** — database at `%APPDATA%/key-stats/data.db` with WAL mode enabled
-- **Numpad aggregation** — numpad digits are merged with main keyboard digits in the heatmap
-- **Frameless window** — Mica backdrop with native Win32 drag support
+- **Global keystroke capture** — low-level Windows hook (`WH_KEYBOARD_LL`), works across all apps
+- **Live dashboard** — today's total, top 10 keys ranking, interactive QWERTY heatmap
+- **System tray** — minimize to tray, show/quit from tray menu
+- **Elegant menus** — `⋯` dropdown + top-bar right-click context menu
+- **Persistent window size** — remembers your last resized dimensions
+- **Custom modal dialogs** — dark glassmorphism alerts that match the app theme
+- **Reset stats** — one-click clear all records with confirmation
+- **Comprehensive key mapping** — F1-F24, arrows, media keys, Fn, L/R modifiers, and more
+- **Zero-config storage** — SQLite with WAL mode at `%APPDATA%/key-stats/data.db`
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
 | Desktop framework | Wails v2 |
-| Backend | Go 1.25, modernc.org/sqlite (pure-Go SQLite) |
+| Backend | Go 1.25, modernc.org/sqlite |
 | Frontend | Svelte 4, Vite 5 |
-| Styling | Tailwind CSS 3, Raycast-inspired dark palette |
-| Windows API | `user32.dll` — `SetWindowsHookExW`, `GetForegroundWindow`, `GetWindowTextW`, `ReleaseCapture`, `SendMessageW` |
+| Styling | Tailwind CSS 3 |
+| Package manager | Bun |
+| System tray | getlantern/systray |
 
 ## Project Structure
 
 ```
 key-stats/
-├── main.go                    # Wails app entry point, window config
-├── app.go                     # App struct, lifecycle hooks, API methods
-├── drag_windows.go            # Win32 window drag for frameless mode (Windows only)
-├── wails.json                 # Wails project config
+├── main.go                    # Entry point (embed + wails.Run)
+├── wails.json                 # Wails config (bun scripts)
 ├── go.mod / go.sum
 ├── build/
-│   ├── appicon.png            # Application icon (256x256)
+│   ├── appicon.png
 │   └── windows/
 │       ├── icon.ico           # Windows multi-size icon
-│       ├── info.json
 │       └── wails.exe.manifest
 ├── frontend/
-│   ├── index.html
 │   ├── package.json
 │   ├── vite.config.js
-│   ├── tailwind.config.js     # Tailwind CSS v3 with custom colors
-│   ├── postcss.config.js
-│   ├── bun.lock / package-lock.json
+│   ├── tailwind.config.js
 │   └── src/
-│       ├── main.js            # Svelte app bootstrap
-│       ├── App.svelte         # Main layout: top bar, stats panel, heatmap
-│       ├── app.css            # Tailwind directives + global styles (hidden scrollbars)
+│       ├── App.svelte         # Main layout, menus, modals
+│       ├── app.css
 │       └── components/
-│           └── KeyboardMap.svelte   # Responsive QWERTY heatmap component
+│           ├── KeyboardMap.svelte
+│           └── Modal.svelte   # Custom glassmorphism dialogs
 ├── internal/
+│   ├── config/
+│   │   └── config.go          # Window size persistence
 │   ├── db/
-│   │   └── sqlite.go          # DB init, batch writer (500 ms), event channel
+│   │   └── sqlite.go          # SQLite + batch writer
 │   ├── models/
-│   │   └── models.go          # Go structs (KeyEvent, TodaySummary, etc.)
+│   │   └── models.go
 │   ├── service/
-│   │   └── keyboard.go        # Win32 keyboard hook + message pump
+│   │   └── keyboard.go        # Win32 LL hook
 │   └── stats/
-│       └── stats.go           # Query/aggregation, VK code → key name mapping
-└── .gitignore
+│       └── stats.go           # VK code → key name mapping
+└── pkg/
+    ├── app/
+    │   ├── app.go             # App struct, lifecycle, API
+    │   └── drag_windows.go    # Native window drag
+    └── tray/
+        └── tray_windows.go    # System tray icon + menu
 ```
 
 ## Prerequisites
 
-- **Go** 1.25+
-- **Bun** (or Node.js/npm) for the frontend
-- **Wails CLI** v2: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
-- **Windows** (required for Win32 keyboard hook APIs)
+- Go 1.25+
+- [Bun](https://bun.sh/)
+- Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
+- Windows 10/11
 
 ## Development
 
 ```bash
-# Install dependencies
-cd frontend && bun install && cd ..
-
-# Run in dev mode (hot-reload frontend + Go backend)
+# Run in dev mode (hot-reload)
 wails dev
 
 # Build production binary
 wails build
+
+# Build with clean cache
+wails build -clean
 ```
 
-The dev server starts Vite on a local port and Wails proxies it. Go code changes trigger a backend rebuild automatically.
+The `wails.json` is already configured to use `bun`:
+
+```json
+{
+  "frontend:install": "bun install",
+  "frontend:build": "bun run build",
+  "frontend:dev:watcher": "bun run dev"
+}
+```
 
 ## Build Output
 
@@ -93,9 +104,11 @@ The dev server starts Vite on a local port and Wails proxies it. Go code changes
 build/bin/key-stats.exe
 ```
 
-## Database
+## Data Storage
 
-SQLite with WAL journal mode. Schema auto-creates on first run:
+SQLite at `%APPDATA%/key-stats/data.db` with WAL mode enabled.
+
+Schema auto-creates on first run:
 
 ```sql
 CREATE TABLE key_events (
@@ -104,22 +117,9 @@ CREATE TABLE key_events (
     app_name    TEXT    NOT NULL,   -- foreground window title
     timestamp   INTEGER NOT NULL    -- Unix epoch ms
 );
-
-CREATE INDEX idx_key_events_timestamp ON key_events (timestamp);
-CREATE INDEX idx_key_events_key_code  ON key_events (key_code);
 ```
 
-Database path: `%APPDATA%/key-stats/data.db`
-
-## API (Wails Bindings)
-
-Methods on `App` struct are auto-exposed to the frontend as `window.go.main.App.*`:
-
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `GetTodayStats()` | `TodaySummary` | Total count + top 10 keys for today (numpad merged) |
-| `ToggleLogger()` | `bool` | Placeholder for enable/disable keyboard hook |
-| `StartDrag()` | — | Initiates native Windows window drag (frameless mode) |
+Config file (window size) at `%APPDATA%/key-stats/config.json`.
 
 ## Architecture
 
@@ -132,15 +132,6 @@ Batch Writer (goroutine) — 500 ms / 256 events → SQLite (WAL)
     ↑
 Wails Frontend ←—— 500 ms poll ——→ Svelte + Tailwind
 ```
-
-### Frameless Window Drag
-
-Because `Frameless: true` with WebView2 Mica backdrop does not reliably support CSS `-webkit-app-region: drag`, the app uses a native Win32 approach:
-
-1. The top bar in `App.svelte` listens for `mousedown`
-2. It calls the Go-bound `StartDrag()` method
-3. `drag_windows.go` sends `WM_NCLBUTTONDOWN` + `HTCAPTION` via `SendMessageW`
-4. Windows takes over and moves the window natively
 
 ## License
 

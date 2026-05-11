@@ -4,6 +4,7 @@ import (
 	"embed"
 	"log"
 
+	"key-stats/internal/config"
 	"key-stats/pkg/app"
 
 	"github.com/wailsapp/wails/v2"
@@ -21,10 +22,20 @@ var appIcon []byte
 func main() {
 	application := app.NewApp(appIcon)
 
+	// Restore saved window size (or use defaults)
+	cfg, _ := config.Load()
+	width, height := cfg.Window.Width, cfg.Window.Height
+	if width == 0 {
+		width = 1280
+	}
+	if height == 0 {
+		height = 800
+	}
+
 	err := wails.Run(&options.App{
 		Title:     "KeyStats",
-		Width:     1280,
-		Height:    800,
+		Width:     width,
+		Height:    height,
 		MinWidth:  1100,
 		MinHeight: 650,
 		AssetServer: &assetserver.Options{

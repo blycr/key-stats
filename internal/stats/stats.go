@@ -160,6 +160,10 @@ func VKToName(vk int) string {
 	case 181: return "Media"
 	case 182: return "Launch1"
 	case 183: return "Launch2"
+	// Fn / Special — some keyboard firmwares emit these for the Fn key
+	case 255: return "Fn"
+	case 232: return "Fn"
+	case 230: return "Fn"
 	}
 	return fmt.Sprintf("VK_%d", vk)
 }

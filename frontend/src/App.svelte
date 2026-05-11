@@ -156,7 +156,7 @@
 <main class="w-screen h-screen flex flex-col bg-surface text-text-primary overflow-hidden selection:bg-accent/30 font-sans relative">
     
     <!-- 顶部状态栏 — 鼠标按下时调用 Go 端 StartDrag 实现无边框窗口拖动 -->
-    <div class="h-14 flex items-center justify-between px-6 bg-surface-raised border-b border-surface-overlay/50 shadow-sm z-50 select-none cursor-default"
+    <div class="h-[72px] flex items-center justify-between px-6 bg-surface-raised border-b border-surface-overlay/50 shadow-sm z-50 select-none cursor-default"
          on:mousedown={() => window.go?.app?.App?.StartDrag?.()}
          on:contextmenu={(e) => toggleMenu('context', e)}
          role="banner"
@@ -194,7 +194,7 @@
     <!-- 下拉 / 右键 菜单 -->
     {#if showMenu}
     <div class="fixed z-[100] w-48 py-1.5 bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/40 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden origin-top-right animate-menu"
-         style={menuMode === 'context' ? `left: ${menuPos.x}px; top: ${menuPos.y}px;` : 'right: 24px; top: 56px;'}
+         style={menuMode === 'context' ? `left: ${menuPos.x}px; top: ${menuPos.y}px;` : 'right: 24px; top: 72px;'}
          on:click|stopPropagation
     >
         <button class="w-full px-4 py-2.5 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-overlay/60 transition-colors flex items-center gap-3" on:click={resetStats}>

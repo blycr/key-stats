@@ -4,6 +4,7 @@ package tray
 
 import (
 	"context"
+	goruntime "runtime"
 
 	"github.com/getlantern/systray"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -17,19 +18,20 @@ type Tray struct {
 	onQuit func()
 }
 
-// New creates a new Tray manager with the given icon bytes (PNG).
+// New creates a new Tray manager with the given icon bytes (ICO).
 func New(icon []byte) *Tray {
 	return &Tray{icon: icon}
 }
 
-// Run starts the system tray in a background goroutine.
-// ctx is the Wails runtime context (needed for runtime.WindowShow / runtime.Quit).
+// Run starts the system tray in a dedicated locked OS thread.
+// Windows systray message loop requires LockOSThread.
 func (t *Tray) Run(ctx context.Context, onShow, onQuit func()) {
 	t.ctx = ctx
 	t.onShow = onShow
 	t.onQuit = onQuit
 
 	go func() {
+		goruntime.LockOSThread()
 		systray.Run(t.ready, t.exit)
 	}()
 }
@@ -44,8 +46,8 @@ func (t *Tray) ready() {
 	systray.SetTitle("KeyStats")
 	systray.SetTooltip("KeyStats — Keyboard Statistics")
 
-	mShow := systray.AddMenuItem("显示主页面", "显示 KeyStats 主窗口")
-	mQuit := systray.AddMenuItem("退出", "退出 KeyStats")
+	mShow := systray.AddMenuItem("Show Window", "Show KeyStats main window")
+	mQuit := systray.AddMenuItem("Quit", "Quit KeyStats")
 
 	go func() {
 		for {

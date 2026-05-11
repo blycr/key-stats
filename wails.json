@@ -1,0 +1,20 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "key-stats",
+  "outputfilename": "key-stats",
+  "frontend:install": "bun install",
+  "frontend:build": "bun run build",
+  "frontend:dev:watcher": "bun run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Developer",
+    "email": "developer@example.com"
+  },
+  "info": {
+    "companyName": "KeyStats",
+    "productName": "KeyStats",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright 2026",
+    "comments": "Windows Keyboard Statistics Tool"
+  }
+}

@@ -3,7 +3,7 @@
     import KeyboardMap from './components/KeyboardMap.svelte';
     import Modal from './components/Modal.svelte';
     import SettingsPanel from './components/SettingsPanel.svelte';
-    import { WindowHide, Quit, EventsOn } from '../wailsjs/runtime/runtime.js';
+    import { WindowHide, Quit } from '../wailsjs/runtime/runtime.js';
 
     // 默认空数据结构
     let statsData = {
@@ -27,9 +27,6 @@
     let modalOnConfirm = () => {};
 
     let showSettingsPanel = false;
-
-    // Real-time key press flash for keyboard heatmap
-    let flashKey = { name: '', ts: 0 };
 
     function openModal({ title, message, mode = 'info', confirmText = 'OK', cancelText = 'Cancel', onConfirm = () => {} }) {
         modalTitle = title;
@@ -153,14 +150,18 @@
         showMenu = false;
     }
 
+    function handleMainClick(e) {
+        // Close menu when clicking outside the menu area
+        if (showMenu && !e.target.closest('[data-menu]')) {
+            closeMenu();
+        }
+    }
+
     onMount(() => {
         fetchLiveStats();
         const interval = setInterval(() => {
             if (isLive) fetchLiveStats();
         }, 500);
-
-        const handleClickOutside = () => closeMenu();
-        document.addEventListener('click', handleClickOutside);
 
         // Debounced resize listener to persist window size
         const saveSize = debounce(async () => {
@@ -178,31 +179,18 @@
         }, 500);
         window.addEventListener('resize', saveSize);
 
-        // Listen for real-time key presses from the backend hook
-        let unsubscribeKeyPress = () => {};
-        if (EventsOn) {
-            unsubscribeKeyPress = EventsOn('key-pressed', (data) => {
-                const ev = Array.isArray(data) ? data[0] : data;
-                if (ev && ev.keyName) {
-                    flashKey = { name: ev.keyName, ts: Date.now() };
-                }
-            });
-        }
-
         return () => {
             clearInterval(interval);
-            document.removeEventListener('click', handleClickOutside);
             window.removeEventListener('resize', saveSize);
-            unsubscribeKeyPress();
         };
     });
 </script>
 
-<main class="w-screen h-screen flex flex-col bg-surface text-text-primary overflow-hidden selection:bg-accent/30 font-sans relative">
+<main class="w-screen h-screen flex flex-col bg-surface text-text-primary overflow-hidden selection:bg-accent/30 font-sans relative" on:click={handleMainClick}>
     
     <!-- 顶部状态栏 — 鼠标按下时调用 Go 端 StartDrag 实现无边框窗口拖动 -->
     <div class="h-[72px] flex items-center justify-between px-6 bg-surface-raised border-b border-surface-overlay/50 shadow-sm z-50 select-none cursor-default"
-         on:mousedown={() => window.go?.app?.App?.StartDrag?.()}
+         on:mousedown={(e) => { if (!e.target.closest('button')) window.go?.app?.App?.StartDrag?.(); }}
          on:contextmenu={(e) => toggleMenu('context', e)}
          role="banner"
     >
@@ -240,6 +228,7 @@
     {#if showMenu}
     <div class="fixed z-[100] w-48 py-1.5 bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/40 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden origin-top-right animate-menu"
          style={menuMode === 'context' ? `left: ${menuPos.x}px; top: ${menuPos.y}px;` : 'right: 24px; top: 72px;'}
+         data-menu
          on:click|stopPropagation
     >
         <button class="w-full px-4 py-2.5 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-overlay/60 transition-colors flex items-center gap-3" on:click={resetStats}>
@@ -329,7 +318,7 @@
                 </h2>
                 
                 <div class="flex-1 flex items-center justify-center">
-                    <KeyboardMap data={statsData.topKeys} {flashKey} />
+                    <KeyboardMap data={statsData.topKeys} />
                 </div>
             </div>
         </div>

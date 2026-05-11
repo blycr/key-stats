@@ -2,6 +2,7 @@
     import { onMount } from 'svelte';
     import KeyboardMap from './components/KeyboardMap.svelte';
     import Modal from './components/Modal.svelte';
+    import SettingsPanel from './components/SettingsPanel.svelte';
     import { WindowHide, Quit } from '../wailsjs/runtime/runtime.js';
 
     // 默认空数据结构
@@ -24,6 +25,8 @@
     let modalConfirmText = 'OK';
     let modalCancelText = 'Cancel';
     let modalOnConfirm = () => {};
+
+    let showSettingsPanel = false;
 
     function openModal({ title, message, mode = 'info', confirmText = 'OK', cancelText = 'Cancel', onConfirm = () => {} }) {
         modalTitle = title;
@@ -128,12 +131,7 @@
 
     function openSettings() {
         closeMenu();
-        openModal({
-            title: 'Settings',
-            message: 'Settings coming soon.',
-            mode: 'info',
-            confirmText: 'OK'
-        });
+        showSettingsPanel = true;
     }
 
     function toggleMenu(mode, e) {
@@ -336,6 +334,9 @@
     on:confirm={modalOnConfirm}
     on:cancel={() => modalShow = false}
 />
+
+<!-- 设置面板 -->
+<SettingsPanel bind:show={showSettingsPanel} />
 
 <style>
     /* 全局隐藏滚动条，保持滚动功能 */

@@ -20,18 +20,21 @@ type DB struct {
 	cancelFunc context.CancelFunc
 }
 
-func InitDB() (*DB, error) {
-	configDir, err := os.UserConfigDir()
-	if err != nil {
+func InitDB(dataDir string) (*DB, error) {
+	if dataDir == "" {
+		var err error
+		dataDir, err = os.UserConfigDir()
+		if err != nil {
+			return nil, err
+		}
+		dataDir = filepath.Join(dataDir, "key-stats")
+	}
+
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return nil, err
 	}
 
-	appDir := filepath.Join(configDir, "key-stats")
-	if err := os.MkdirAll(appDir, 0755); err != nil {
-		return nil, err
-	}
-
-	dbPath := filepath.Join(appDir, "data.db")
+	dbPath := filepath.Join(dataDir, "data.db")
 	conn, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, err

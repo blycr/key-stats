@@ -6,12 +6,12 @@ export function Ctx() {
   return window['go']['app']['App']['Ctx']();
 }
 
-export function GetTodayStats() {
-  return window['go']['app']['App']['GetTodayStats']();
+export function GetConfig() {
+  return window['go']['app']['App']['GetConfig']();
 }
 
-export function GetWindowSize() {
-  return window['go']['app']['App']['GetWindowSize']();
+export function GetTodayStats() {
+  return window['go']['app']['App']['GetTodayStats']();
 }
 
 export function ResetStats() {
@@ -20,6 +20,10 @@ export function ResetStats() {
 
 export function SaveWindowSize(arg1, arg2) {
   return window['go']['app']['App']['SaveWindowSize'](arg1, arg2);
+}
+
+export function SetConfig(arg1) {
+  return window['go']['app']['App']['SetConfig'](arg1);
 }
 
 export function StartDrag() {

@@ -1,22 +1,3 @@
-export namespace config {
-	
-	export class WindowState {
-	    Width: number;
-	    Height: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new WindowState(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.Width = source["Width"];
-	        this.Height = source["Height"];
-	    }
-	}
-
-}
-
 export namespace models {
 	
 	export class AppCount {

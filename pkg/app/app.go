@@ -67,18 +67,16 @@ func (a *App) Shutdown(ctx context.Context) {
 
 // GetWindowSize returns the saved window dimensions.
 func (a *App) GetWindowSize() (config.WindowState, error) {
-	cfg, err := config.Load()
+	ws, err := config.Load()
 	if err != nil {
 		return config.WindowState{}, err
 	}
-	return cfg.Window, nil
+	return *ws, nil
 }
 
 // SaveWindowSize persists the current window dimensions.
 func (a *App) SaveWindowSize(width, height int) error {
-	return config.Save(&config.Config{
-		Window: config.WindowState{Width: width, Height: height},
-	})
+	return config.Save(&config.WindowState{Width: width, Height: height})
 }
 
 // -- API Contract --

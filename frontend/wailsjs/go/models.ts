@@ -1,8 +1,8 @@
 export namespace config {
 	
 	export class WindowState {
-	    width: number;
-	    height: number;
+	    Width: number;
+	    Height: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new WindowState(source);
@@ -10,8 +10,8 @@ export namespace config {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.width = source["width"];
-	        this.height = source["height"];
+	        this.Width = source["Width"];
+	        this.Height = source["Height"];
 	    }
 	}
 

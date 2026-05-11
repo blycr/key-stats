@@ -23,8 +23,8 @@ func main() {
 	application := app.NewApp(appIcon)
 
 	// Restore saved window size (or use defaults)
-	cfg, _ := config.Load()
-	width, height := cfg.Window.Width, cfg.Window.Height
+	ws, _ := config.Load()
+	width, height := ws.Width, ws.Height
 	if width == 0 {
 		width = 1280
 	}

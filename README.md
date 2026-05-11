@@ -2,7 +2,7 @@
 
 Real-time keyboard usage tracker for Windows. Beautiful, minimal, and stays out of your way.
 
-![screenshot](https://user-images.githubusercontent.com/placeholder/key-stats.png)
+![KeyStats Screenshot](docs/screenshot.jpg)
 
 ## Features
 

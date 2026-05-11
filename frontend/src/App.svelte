@@ -148,9 +148,6 @@
 </main>
 
 <style>
-    /* 全局滚动条美化 */
-    :global(::-webkit-scrollbar) { width: 6px; }
-    :global(::-webkit-scrollbar-track) { background: transparent; }
-    :global(::-webkit-scrollbar-thumb) { background: #3A3A3C; border-radius: 6px; }
-    :global(::-webkit-scrollbar-thumb:hover) { background: #4A4A4C; }
+    /* 全局隐藏滚动条，保持滚动功能 */
+    :global(::-webkit-scrollbar) { width: 0px; background: transparent; }
 </style>

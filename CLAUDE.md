@@ -8,8 +8,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Dev mode (hot-reload, uses bun for frontend)
 wails dev
 
-# Production build → build/bin/key-stats.exe
-wails build
+# Production build → build/bin/key-stats.exe (~8.5MB)
+./build.sh
+
+# Or two-step manually (wails ldflags doesn't propagate correctly):
+wails build -s          # frontend + bindings only
+go build -ldflags="-s -w" -o build/bin/key-stats.exe .
 
 # Frontend only (rarely needed standalone)
 cd frontend && bun run build

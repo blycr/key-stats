@@ -81,11 +81,12 @@ key-stats/
 # Run in dev mode (hot-reload)
 wails dev
 
-# Build production binary
-wails build
+# Build production binary (stripped, ~8.5MB)
+./build.sh
 
-# Build with clean cache
-wails build -clean
+# Or manually:
+wails build -s
+go build -ldflags="-s -w" -o build/bin/key-stats.exe .
 ```
 
 The `wails.json` is already configured to use `bun`:

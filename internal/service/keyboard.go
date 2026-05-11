@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"log"
 	"syscall"
 	"time"
@@ -60,16 +61,20 @@ func getActiveWindowTitle() string {
 }
 
 type KeyboardService struct {
-	db     *db.DB
-	hook   uintptr
-	active bool
-	emit   func(eventName string, data ...interface{})
+	db       *db.DB
+	hook     uintptr
+	active   bool
+	emit     func(eventName string, data ...interface{})
+	rtChan   chan map[string]interface{}
+	rtCtx    context.Context
+	rtCancel context.CancelFunc
 }
 
 func NewKeyboardService(database *db.DB, emit func(string, ...interface{})) *KeyboardService {
 	return &KeyboardService{
-		db:   database,
-		emit: emit,
+		db:     database,
+		emit:   emit,
+		rtChan: make(chan map[string]interface{}, 256),
 	}
 }
 
@@ -79,6 +84,13 @@ func (s *KeyboardService) Start() {
 	}
 	s.active = true
 	globalService = s
+	s.rtCtx, s.rtCancel = context.WithCancel(context.Background())
+
+	// Start a dedicated goroutine to safely emit real-time events.
+	// runtime.EventsEmit must NOT be called from the syscall callback (hookProc)
+	// because the Go scheduler cannot safely handle blocking/channel operations
+	// on the Windows callback thread.
+	go s.rtEmitter()
 
 	go func() {
 		defer func() {
@@ -124,11 +136,33 @@ func (s *KeyboardService) Start() {
 	}()
 }
 
+// rtEmitter runs in its own goroutine and safely calls emit() for each
+// real-time key event. This avoids calling runtime.EventsEmit from the
+// Windows syscall callback thread.
+func (s *KeyboardService) rtEmitter() {
+	for {
+		select {
+		case <-s.rtCtx.Done():
+			return
+		case ev, ok := <-s.rtChan:
+			if !ok {
+				return
+			}
+			if s.emit != nil {
+				s.emit("key-pressed", ev)
+			}
+		}
+	}
+}
+
 func (s *KeyboardService) Stop() {
 	if !s.active {
 		return
 	}
 	s.active = false
+	if s.rtCancel != nil {
+		s.rtCancel()
+	}
 	if s.hook != 0 {
 		unhookWindowsHookEx.Call(s.hook)
 		s.hook = 0
@@ -157,13 +191,19 @@ func hookProc(nCode int32, wParam uintptr, lParam uintptr) uintptr {
 				})
 			}
 
-			// Emit real-time key press event to frontend
-			if globalService != nil && globalService.emit != nil {
+			// Queue real-time event via non-blocking channel send.
+			// hookProc runs on a Windows callback thread; we must not call
+			// runtime.EventsEmit here. The rtEmitter goroutine handles it.
+			if globalService != nil && globalService.active {
 				name := stats.VKToName(vk)
-				globalService.emit("key-pressed", map[string]interface{}{
+				select {
+				case globalService.rtChan <- map[string]interface{}{
 					"keyCode": vk,
 					"keyName": name,
-				})
+				}:
+				default:
+					// Channel full — drop real-time event to avoid blocking hook
+				}
 			}
 		}
 	}

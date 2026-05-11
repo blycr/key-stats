@@ -139,10 +139,16 @@ func hookProc(nCode int32, wParam uintptr, lParam uintptr) uintptr {
 			lParamPtr := *(*unsafe.Pointer)(unsafe.Pointer(&lParam))
 			kbd := (*KBDLLHOOKSTRUCT)(lParamPtr)
 
+			vk := int(kbd.VkCode)
+			// Debug log for special keys (Win, Alt, Ctrl, etc.)
+			if vk == 91 || vk == 92 {
+				log.Printf("[DEBUG] Captured Windows key VK=%d wParam=0x%X", vk, wParam)
+			}
+
 			// Push to DB safely
 			if globalService != nil && globalService.db != nil {
 				globalService.db.PushEvent(models.KeyEvent{
-					KeyCode:   int(kbd.VkCode),
+					KeyCode:   vk,
 					AppName:   getActiveWindowTitle(),
 					Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
 				})

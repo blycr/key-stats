@@ -3,6 +3,7 @@ package stats
 import (
 	"database/sql"
 	"key-stats/internal/models"
+	"sort"
 )
 
 func GetTodaySummary(db *sql.DB) (models.TodaySummary, error) {
@@ -40,7 +41,7 @@ func GetTodaySummary(db *sql.DB) (models.TodaySummary, error) {
 		nameCount[name] += kc.Count
 	}
 
-	// Convert map to slice and sort by count
+	// Convert map to slice and sort by count (desc), then name (asc) for stable ordering
 	type pair struct {
 		name  string
 		count int
@@ -49,13 +50,12 @@ func GetTodaySummary(db *sql.DB) (models.TodaySummary, error) {
 	for n, c := range nameCount {
 		pairs = append(pairs, pair{n, c})
 	}
-	for i := 0; i < len(pairs)-1; i++ {
-		for j := i + 1; j < len(pairs); j++ {
-			if pairs[j].count > pairs[i].count {
-				pairs[i], pairs[j] = pairs[j], pairs[i]
-			}
+	sort.SliceStable(pairs, func(i, j int) bool {
+		if pairs[i].count == pairs[j].count {
+			return pairs[i].name < pairs[j].name
 		}
-	}
+		return pairs[i].count > pairs[j].count
+	})
 	for i := 0; i < len(pairs) && i < 10; i++ {
 		summary.TopKeys = append(summary.TopKeys, models.KeyCount{
 			KeyName: pairs[i].name,
@@ -91,6 +91,7 @@ func VKToName(vk int) string {
 	case 27:  return "Esc"
 	case 20:  return "Caps"
 	case 91:  return "Win"
+	case 92:  return "Win"
 	case 106: return "*"
 	case 107: return "+"
 	case 109: return "-"

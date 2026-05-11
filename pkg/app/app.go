@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log"
 	"key-stats/internal/config"
 	"key-stats/internal/db"
 	"key-stats/internal/models"
@@ -31,19 +32,19 @@ func NewApp(icon []byte) *App {
 // Startup is called when the app starts. Opens DB, starts logger, starts tray.
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
-	fmt.Println("App is starting up...")
+	log.Println("App is starting up...")
 
 	// 1. Resolve data directory (respects PORTABLE_MODE in .env)
 	dataDir, err := config.DataDir()
 	if err != nil {
-		fmt.Printf("Failed to resolve data dir: %v\n", err)
+		log.Printf("Failed to resolve data dir: %v", err)
 		return
 	}
 
 	// 2. Initialize DB
 	d, err := db.InitDB(dataDir)
 	if err != nil {
-		fmt.Printf("Failed to init DB: %v\n", err)
+		log.Printf("Failed to init DB: %v", err)
 		return
 	}
 	a.database = d
@@ -63,7 +64,7 @@ func (a *App) Startup(ctx context.Context) {
 
 // Shutdown is called when the app is closing.
 func (a *App) Shutdown(ctx context.Context) {
-	fmt.Println("App is shutting down...")
+	log.Println("App is shutting down...")
 
 	if a.trayMgr != nil {
 		a.trayMgr.Quit()
@@ -132,11 +133,6 @@ func (a *App) ResetStats() error {
 		return fmt.Errorf("database not initialized")
 	}
 	return a.database.Reset()
-}
-
-// ToggleLogger enables or disables the keyboard hook. Returns new state.
-func (a *App) ToggleLogger() (bool, error) {
-	return true, nil
 }
 
 // Ctx returns the Wails context (used by runtime calls from other packages).

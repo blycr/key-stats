@@ -41,8 +41,12 @@ func InitDB(dataDir string) (*DB, error) {
 	}
 
 	// PRAGMA for SQLite WAL mode and performance
-	_, _ = conn.Exec("PRAGMA journal_mode=WAL;")
-	_, _ = conn.Exec("PRAGMA synchronous=NORMAL;")
+	if _, err := conn.Exec("PRAGMA journal_mode=WAL;"); err != nil {
+		log.Printf("WAL mode not available: %v", err)
+	}
+	if _, err := conn.Exec("PRAGMA synchronous=NORMAL;"); err != nil {
+		log.Printf("synchronous NORMAL not available: %v", err)
+	}
 
 	query := `
 	CREATE TABLE IF NOT EXISTS key_events (

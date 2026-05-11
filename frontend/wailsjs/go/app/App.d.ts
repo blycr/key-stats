@@ -16,5 +16,3 @@ export function SaveWindowSize(arg1:number,arg2:number):Promise<void>;
 export function SetConfig(arg1:Record<string, any>):Promise<Array<string>>;
 
 export function StartDrag():Promise<void>;
-
-export function ToggleLogger():Promise<boolean>;

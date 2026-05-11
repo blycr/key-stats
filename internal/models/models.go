@@ -7,12 +7,6 @@ type KeyEvent struct {
 	Timestamp int64  `json:"timestamp"` // Unix ms
 }
 
-type DailyStat struct {
-	Date       string `json:"date"`
-	KeyCode    int    `json:"keyCode"`
-	TotalCount int    `json:"totalCount"`
-}
-
 type TodaySummary struct {
 	TotalKeys    int          `json:"totalKeys"`
 	TopKeys      []KeyCount   `json:"topKeys"`

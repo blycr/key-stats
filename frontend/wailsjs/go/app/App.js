@@ -29,7 +29,3 @@ export function SetConfig(arg1) {
 export function StartDrag() {
   return window['go']['app']['App']['StartDrag']();
 }
-
-export function ToggleLogger() {
-  return window['go']['app']['App']['ToggleLogger']();
-}

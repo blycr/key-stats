@@ -177,10 +177,6 @@ func hookProc(nCode int32, wParam uintptr, lParam uintptr) uintptr {
 			kbd := (*KBDLLHOOKSTRUCT)(lParamPtr)
 
 			vk := int(kbd.VkCode)
-			// Debug log for special keys (Win, Alt, Ctrl, etc.)
-			if vk == 91 || vk == 92 {
-				log.Printf("[DEBUG] Captured Windows key VK=%d wParam=0x%X", vk, wParam)
-			}
 
 			// Push to DB safely
 			if globalService != nil && globalService.db != nil {

@@ -23,7 +23,10 @@ func main() {
 	application := app.NewApp(appIcon)
 
 	// Restore saved window size (or use defaults)
-	cfg, _ := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Printf("Failed to load config: %v", err)
+	}
 	width, height := cfg.WindowWidth, cfg.WindowHeight
 	if width == 0 {
 		width = 1280
@@ -32,7 +35,7 @@ func main() {
 		height = 800
 	}
 
-	err := wails.Run(&options.App{
+	err = wails.Run(&options.App{
 		Title:     "KeyStats",
 		Width:     width,
 		Height:    height,

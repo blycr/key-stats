@@ -19,7 +19,7 @@ go build -ldflags="-s -w" -o build/bin/key-stats.exe .
 cd frontend && bun run build
 ```
 
-Prerequisites: Go 1.25+, Bun, Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`), Windows 10/11.
+Prerequisites: Go 1.24+, Bun, Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`), Windows 10/11.
 
 ## Architecture
 

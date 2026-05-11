@@ -80,6 +80,12 @@ func (d *DB) GetConn() *sql.DB {
 	return d.conn
 }
 
+// Reset deletes all recorded key events from the database.
+func (d *DB) Reset() error {
+	_, err := d.conn.Exec("DELETE FROM key_events")
+	return err
+}
+
 func (d *DB) Close() {
 	d.cancelFunc()
 	close(d.eventChan)

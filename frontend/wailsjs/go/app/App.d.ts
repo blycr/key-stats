@@ -7,6 +7,8 @@ export function Ctx():Promise<context.Context>;
 
 export function GetTodayStats():Promise<models.TodaySummary>;
 
+export function ResetStats():Promise<void>;
+
 export function StartDrag():Promise<void>;
 
 export function ToggleLogger():Promise<boolean>;

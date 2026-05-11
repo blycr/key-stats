@@ -73,6 +73,14 @@ func (a *App) GetTodayStats() (models.TodaySummary, error) {
 	return stats.GetTodaySummary(a.database.GetConn())
 }
 
+// ResetStats clears all recorded keystroke statistics from the database.
+func (a *App) ResetStats() error {
+	if a.database == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	return a.database.Reset()
+}
+
 // ToggleLogger enables or disables the keyboard hook. Returns new state.
 func (a *App) ToggleLogger() (bool, error) {
 	return true, nil

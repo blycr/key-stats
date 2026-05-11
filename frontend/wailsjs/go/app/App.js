@@ -10,6 +10,10 @@ export function GetTodayStats() {
   return window['go']['app']['App']['GetTodayStats']();
 }
 
+export function ResetStats() {
+  return window['go']['app']['App']['ResetStats']();
+}
+
 export function StartDrag() {
   return window['go']['app']['App']['StartDrag']();
 }

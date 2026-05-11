@@ -4,4 +4,6 @@ import {models} from '../models';
 
 export function GetTodayStats():Promise<models.TodaySummary>;
 
+export function StartDrag():Promise<void>;
+
 export function ToggleLogger():Promise<boolean>;

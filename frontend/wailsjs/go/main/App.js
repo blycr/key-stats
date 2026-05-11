@@ -6,6 +6,10 @@ export function GetTodayStats() {
   return window['go']['main']['App']['GetTodayStats']();
 }
 
+export function StartDrag() {
+  return window['go']['main']['App']['StartDrag']();
+}
+
 export function ToggleLogger() {
   return window['go']['main']['App']['ToggleLogger']();
 }

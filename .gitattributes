@@ -1,6 +1,9 @@
 # Windows-only project — use CRLF for all text files
 * text=auto eol=crlf
 
+# Wails auto-generated files — always LF (matches wails dev output)
+frontend/wailsjs/** text eol=lf
+
 # Binary files — do not convert line endings
 *.png binary
 *.ico binary

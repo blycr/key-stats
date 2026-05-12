@@ -7,16 +7,24 @@ import (
 	"sort"
 )
 
-func GetStatsSummary(db *sql.DB, daysAgo int) (models.TodaySummary, error) {
+// GetDateRangeSummary returns aggregate stats for a date range (inclusive).
+// startDaysAgo is the older date, endDaysAgo is the newer date.
+// Example: GetDateRangeSummary(db, 7, 0) returns stats for the last 7 days including today.
+func GetDateRangeSummary(db *sql.DB, startDaysAgo, endDaysAgo int) (models.TodaySummary, error) {
 	var summary models.TodaySummary
 	summary.TopKeys = []models.KeyCount{}
 	summary.AppBreakdown = []models.AppCount{}
 
 	var dateFilter string
-	if daysAgo == 0 {
-		dateFilter = "date(timestamp/1000, 'unixepoch') = date('now')"
+	if startDaysAgo == endDaysAgo {
+		if startDaysAgo == 0 {
+			dateFilter = "date(timestamp/1000, 'unixepoch') = date('now')"
+		} else {
+			dateFilter = fmt.Sprintf("date(timestamp/1000, 'unixepoch') = date('now', '-%d day')", startDaysAgo)
+		}
 	} else {
-		dateFilter = fmt.Sprintf("date(timestamp/1000, 'unixepoch') = date('now', '-%d day')", daysAgo)
+		dateFilter = fmt.Sprintf("date(timestamp/1000, 'unixepoch') BETWEEN date('now', '-%d day') AND date('now', '-%d day')",
+			startDaysAgo, endDaysAgo)
 	}
 
 	// Total Keys
@@ -28,11 +36,11 @@ func GetStatsSummary(db *sql.DB, daysAgo int) (models.TodaySummary, error) {
 
 	// Top Keys
 	query = fmt.Sprintf(`
-		SELECT key_code, COUNT(*) as count 
-		FROM key_events 
+		SELECT key_code, COUNT(*) as count
+		FROM key_events
 		WHERE %s
-		GROUP BY key_code 
-		ORDER BY count DESC 
+		GROUP BY key_code
+		ORDER BY count DESC
 		LIMIT 50
 	`, dateFilter)
 	rows, err := db.Query(query)
@@ -72,7 +80,33 @@ func GetStatsSummary(db *sql.DB, daysAgo int) (models.TodaySummary, error) {
 		})
 	}
 
+	// App Breakdown
+	query = fmt.Sprintf(`
+		SELECT app_name, COUNT(*) as count
+		FROM key_events
+		WHERE %s
+		GROUP BY app_name
+		ORDER BY count DESC
+		LIMIT 10
+	`, dateFilter)
+	appRows, err := db.Query(query)
+	if err == nil {
+		defer appRows.Close()
+		for appRows.Next() {
+			var ac models.AppCount
+			if err := appRows.Scan(&ac.AppName, &ac.Count); err != nil {
+				continue
+			}
+			summary.AppBreakdown = append(summary.AppBreakdown, ac)
+		}
+	}
+
 	return summary, nil
+}
+
+// GetStatsSummary returns aggregate stats for a single day by offset from today.
+func GetStatsSummary(db *sql.DB, daysAgo int) (models.TodaySummary, error) {
+	return GetDateRangeSummary(db, daysAgo, daysAgo)
 }
 
 // GetTodaySummary delegates to GetStatsSummary with daysAgo=0 for backward compatibility.
@@ -105,8 +139,8 @@ func VKToName(vk int) string {
 	case 9:   return "Tab"
 	case 27:  return "Esc"
 	case 20:  return "Caps"
-	case 91:  return "Win"
-	case 92:  return "Win"
+	case 91:  return "LWin"
+	case 92:  return "RWin"
 	case 93:  return "Menu"
 	case 95:  return "Sleep"
 	// Modifiers — left/right variants
@@ -153,7 +187,7 @@ func VKToName(vk int) string {
 	case 220: return "\\"
 	case 221: return "]"
 	case 222: return "'"
-	case 223: return "`"
+	case 223: return "~"
 	// Media / Browser
 	case 166: return "BrwBack"
 	case 167: return "BrwFwd"

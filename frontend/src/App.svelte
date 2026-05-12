@@ -29,7 +29,8 @@
     let showSettingsPanel = false;
     let showDateDropdown = false;
     let dateRange = 'Today';
-    let daysAgo = 0;
+    let startDays = 0;
+    let endDays = 0;
 
     function openModal({ title, message, mode = 'info', confirmText = 'OK', cancelText = 'Cancel', onConfirm = () => {} }) {
         modalTitle = title;
@@ -52,27 +53,16 @@
 
     async function fetchLiveStats() {
         if (!window.go?.app?.App?.GetTodayStats) {
-            statsData = {
-                totalKeys: 12847,
-                topKeys: [
-                    { keyName: 'Space', count: 2103 },
-                    { keyName: 'E', count: 1024 },
-                    { keyName: 'A', count: 891 },
-                    { keyName: 'Backspace', count: 756 },
-                    { keyName: 'Enter', count: 654 }
-                ],
-                appBreakdown: []
-            };
+            console.warn("Go backend not available — stats will be empty");
+            statsData = { totalKeys: 0, topKeys: [], appBreakdown: [] };
             return;
         }
         try {
             let data;
-            if (daysAgo === 0) {
+            if (startDays === 0 && endDays === 0) {
                 data = await window.go.app.App.GetTodayStats();
-            } else if (window.go?.app?.App?.GetStats) {
-                data = await window.go.app.App.GetStats(daysAgo);
             } else {
-                data = await window.go.app.App.GetTodayStats();
+                data = await window.go.app.App.GetDateRangeStats(startDays, endDays);
             }
             if (data && data.status !== 'not implemented') {
                  statsData = data;
@@ -83,15 +73,16 @@
     }
 
     const dateOptions = [
-        { label: 'Today', days: 0 },
-        { label: 'Yesterday', days: 1 },
-        { label: 'Last 7 Days', days: 7 },
-        { label: 'Last 30 Days', days: 30 },
+        { label: 'Today', startDays: 0, endDays: 0 },
+        { label: 'Yesterday', startDays: 1, endDays: 1 },
+        { label: 'Last 7 Days', startDays: 7, endDays: 0 },
+        { label: 'Last 30 Days', startDays: 30, endDays: 0 },
     ];
 
     function selectDateRange(option) {
         dateRange = option.label;
-        daysAgo = option.days;
+        startDays = option.startDays;
+        endDays = option.endDays;
         showDateDropdown = false;
         fetchLiveStats();
     }
@@ -235,11 +226,11 @@
 </script>
 
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-<main class="w-screen h-screen flex flex-col bg-surface text-text-primary overflow-hidden selection:bg-accent/30 font-mono relative" on:click={handleMainClick} on:keydown={handleMainKeydown} role="application">
+<main class="w-screen h-screen flex flex-col bg-surface text-text-primary overflow-hidden selection:bg-accent/30 font-mono relative" on:click={handleMainClick} on:keydown={handleMainKeydown} on:contextmenu|preventDefault role="application">
     
     <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
     <!-- Title bar — on mousedown calls Go StartDrag for frameless window drag -->
-    <div class="h-[72px] flex items-center justify-between px-6 bg-surface-raised border-b border-surface-overlay/50 shadow-sm z-50 select-none cursor-default"
+    <div class="h-[84px] flex items-center justify-between px-6 bg-surface-raised border-b border-surface-overlay/50 shadow-sm z-50 select-none cursor-grab"
          on:mousedown={(e) => { if (!e.target.closest('button')) window.go?.app?.App?.StartDrag?.(); }}
          on:contextmenu={(e) => toggleMenu('context', e)}
          role="banner"
@@ -340,6 +331,27 @@
                 <div class="text-4xl font-mono text-white font-light flex items-baseline gap-2">
                     {statsData.totalKeys.toLocaleString()}
                     <span class="text-xs font-mono text-accent font-medium tracking-wide">KEYS</span>
+                </div>
+            </div>
+
+            <!-- App Breakdown card -->
+            <div class="bg-surface-raised/80 backdrop-blur-lg rounded-2xl p-5 border border-surface-overlay/50 shadow-card max-h-[200px] flex flex-col">
+                <h2 class="text-[10px] font-bold text-text-tertiary tracking-widest uppercase mb-4">Top Apps</h2>
+                <div class="flex flex-col gap-3 overflow-y-auto pr-3 custom-scrollbar h-full">
+                    {#each statsData.appBreakdown as app, i}
+                        <div class="flex items-center gap-3 group relative">
+                            <span class="text-text-tertiary font-mono text-[10px] w-3 text-right">{i + 1}</span>
+                            <span class="font-mono text-text-primary text-[11px] flex-1 truncate" title={app.appName}>
+                                {app.appName}
+                            </span>
+                            <span class="text-text-secondary font-mono text-xs w-10 text-right">{app.count}</span>
+                        </div>
+                    {/each}
+                    {#if statsData.appBreakdown.length === 0}
+                        <div class="text-text-tertiary text-xs flex items-center justify-center h-full opacity-50">
+                            No data yet
+                        </div>
+                    {/if}
                 </div>
             </div>
 

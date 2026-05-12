@@ -134,7 +134,7 @@
     $: if (show) loadSettings();
 </script>
 
-<svelte:window on:keydown={onKeydown}/>
+<svelte:window on:keydown={onKeydown} on:click={onWindowClick}/>
 
 {#if show}
 <!-- svelte-ignore a11y-no-static-element-interactions -->

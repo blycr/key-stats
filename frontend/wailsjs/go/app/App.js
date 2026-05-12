@@ -6,6 +6,10 @@ export function GetConfig() {
   return window['go']['app']['App']['GetConfig']();
 }
 
+export function GetDateRangeStats(arg1, arg2) {
+  return window['go']['app']['App']['GetDateRangeStats'](arg1, arg2);
+}
+
 export function GetStats(arg1) {
   return window['go']['app']['App']['GetStats'](arg1);
 }

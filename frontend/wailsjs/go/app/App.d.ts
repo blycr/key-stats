@@ -4,6 +4,8 @@ import {models} from '../models';
 
 export function GetConfig():Promise<Record<string, any>>;
 
+export function GetDateRangeStats(arg1:number,arg2:number):Promise<models.TodaySummary>;
+
 export function GetStats(arg1:number):Promise<models.TodaySummary>;
 
 export function GetSystemFonts():Promise<Array<string>>;

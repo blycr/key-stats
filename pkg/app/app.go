@@ -140,6 +140,16 @@ func (a *App) GetStats(daysAgo int) (models.TodaySummary, error) {
 	return stats.GetStatsSummary(a.database.GetConn(), daysAgo)
 }
 
+// GetDateRangeStats returns aggregate stats for a date range (inclusive).
+// startDaysAgo is the older date, endDaysAgo is the newer date.
+// Example: GetDateRangeStats(7, 0) returns stats for the last 7 days including today.
+func (a *App) GetDateRangeStats(startDays, endDays int) (models.TodaySummary, error) {
+	if a.database == nil {
+		return models.TodaySummary{}, fmt.Errorf("database not initialized")
+	}
+	return stats.GetDateRangeSummary(a.database.GetConn(), startDays, endDays)
+}
+
 // ResetStats clears all recorded keystroke statistics from the database.
 func (a *App) ResetStats() error {
 	if a.database == nil {

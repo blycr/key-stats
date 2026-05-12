@@ -5,27 +5,27 @@ export default {
     extend: {
       colors: {
         surface: {
-          DEFAULT: '#1C1C1E',
-          raised: '#2C2C2E',
-          overlay: '#3A3A3C',
+          DEFAULT: 'rgb(var(--color-surface) / <alpha-value>)',
+          raised: 'rgb(var(--color-surface-raised) / <alpha-value>)',
+          overlay: 'rgb(var(--color-surface-overlay) / <alpha-value>)',
         },
         accent: {
-          DEFAULT: '#6C63FF',
-          hover: '#7F78FF',
-          muted: '#6C63FF33',
+          DEFAULT: 'rgb(var(--color-accent) / <alpha-value>)',
+          hover: 'rgb(var(--color-accent-hover) / <alpha-value>)',
+          muted: 'rgb(var(--color-accent) / 0.2)',
         },
         text: {
-          primary: '#F5F5F7',
-          secondary: '#A1A1A6',
-          tertiary: '#6E6E73',
+          primary: 'rgb(var(--color-text-primary) / <alpha-value>)',
+          secondary: 'rgb(var(--color-text-secondary) / <alpha-value>)',
+          tertiary: 'rgb(var(--color-text-tertiary) / <alpha-value>)',
         },
         heatmap: {
-          low: '#2C2C2E',
-          mid: '#6C63FF66',
-          high: '#6C63FF',
+          low: 'rgb(var(--color-surface) / <alpha-value>)',
+          mid: 'rgb(var(--color-heatmap) / 0.4)',
+          high: 'rgb(var(--color-heatmap) / <alpha-value>)',
         },
-        success: '#30D158',
-        danger: '#FF453A',
+        success: 'rgb(var(--color-success) / <alpha-value>)',
+        danger: 'rgb(var(--color-danger) / <alpha-value>)',
       },
       fontFamily: {
         sans: ['var(--app-font)', '"JetBrains Mono"', '"Fira Code"', '"Cascadia Code"', '"Consolas"', 'monospace'],
@@ -35,7 +35,7 @@ export default {
         card: '12px',
       },
       boxShadow: {
-        card: '0 1px 3px rgba(0,0,0,0.3)',
+        card: 'var(--shadow-card)',
       },
     },
   },

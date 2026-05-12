@@ -2,8 +2,62 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Dark theme (default) ── */
 :root {
   --app-font: "JetBrains Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
+
+  /* RGB channel values — used via rgb(var(--name) / <alpha-value>) in Tailwind */
+  --color-surface: 28 28 30;
+  --color-surface-raised: 44 44 46;
+  --color-surface-overlay: 58 58 60;
+  --color-text-primary: 245 245 247;
+  --color-text-secondary: 161 161 166;
+  --color-text-tertiary: 110 110 115;
+  --color-accent: 108 99 255;
+  --color-accent-hover: 127 120 255;
+  --color-heatmap: 108 99 255;
+  --color-success: 48 209 88;
+  --color-danger: 255 69 58;
+
+  /* Shadow helpers — raw RGB channels for use in rgba() */
+  --color-shadow: 0 0 0;
+
+  /* Box-shadow presets */
+  --shadow-card: 0 1px 3px rgba(0 0 0 / 0.3);
+  --shadow-dropdown: 0 8px 30px rgba(0 0 0 / 0.4);
+  --shadow-modal: 0 20px 60px rgba(0 0 0 / 0.5);
+}
+
+/* ── Light theme ── */
+[data-theme="light"] {
+  --color-surface: 239 238 235;
+  --color-surface-raised: 250 250 248;
+  --color-surface-overlay: 229 227 224;
+  --color-text-primary: 28 27 26;
+  --color-text-secondary: 106 104 101;
+  --color-text-tertiary: 155 153 150;
+  --color-accent: 88 81 230;
+  --color-accent-hover: 108 100 255;
+  --color-heatmap: 88 81 230;
+  --color-success: 46 139 87;
+  --color-danger: 220 38 38;
+  --color-shadow: 0 0 0;
+
+  /* Softer shadows for light background */
+  --shadow-card: 0 1px 3px rgba(0 0 0 / 0.06);
+  --shadow-dropdown: 0 8px 30px rgba(0 0 0 / 0.10);
+  --shadow-modal: 0 20px 60px rgba(0 0 0 / 0.12);
+}
+
+/* ── Theme transition ── */
+*,
+*::before,
+*::after {
+  transition:
+    background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 body {

@@ -3,6 +3,7 @@
     export let show = false;
 
     import { createEventDispatcher } from 'svelte';
+    import { applyTheme } from '../theme.js';
     const dispatch = createEventDispatcher();
 
     let settings = {
@@ -91,6 +92,7 @@
             });
             console.log('Config updated:', changed);
             applyFont(settings.fontFamily);
+            applyTheme(settings.theme);
             closePanel();
         } catch (e) {
             console.error('Failed to save config:', e);
@@ -141,7 +143,7 @@
 <div class="fixed inset-0 z-[200] flex items-center justify-center" on:click|self={closePanel} on:keydown={onKeydown} role="presentation">
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"></div>
 
-    <div class="relative w-[420px] bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] overflow-hidden animate-modal-in">
+    <div class="relative w-[420px] bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-2xl shadow-[var(--shadow-modal)] overflow-hidden animate-modal-in">
         <div class="h-0.5 w-full bg-gradient-to-r from-transparent via-accent/50 to-transparent"></div>
 
         <div class="p-6">
@@ -167,7 +169,7 @@
                         </button>
 
                         {#if showThemeDropdown}
-                        <div class="absolute right-0 top-full mt-1 w-full min-w-[100px] bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden z-[300] animate-dropdown-in">
+                        <div class="absolute right-0 top-full mt-1 w-full min-w-[100px] bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-xl shadow-[var(--shadow-dropdown)] overflow-hidden z-[300] animate-dropdown-in">
                             {#each themeOptions as opt}
                             <button
                                 class="w-full px-3 py-2 text-xs text-left transition-colors {settings.theme === opt.value ? 'text-text-primary bg-surface-overlay/40' : 'text-text-secondary hover:text-text-primary hover:bg-surface-overlay/30'}"
@@ -200,7 +202,7 @@
                         </button>
 
                         {#if showFontDropdown}
-                        <div class="absolute right-0 top-full mt-1 w-[200px] max-h-[240px] overflow-y-auto bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] z-[300] animate-dropdown-in custom-scrollbar">
+                        <div class="absolute right-0 top-full mt-1 w-[200px] max-h-[240px] overflow-y-auto bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-xl shadow-[var(--shadow-dropdown)] z-[300] animate-dropdown-in custom-scrollbar">
                             {#each systemFonts as font}
                             <button
                                 class="w-full px-3 py-2 text-xs text-left transition-colors {settings.fontFamily === font ? 'text-text-primary bg-surface-overlay/40' : 'text-text-secondary hover:text-text-primary hover:bg-surface-overlay/30'}"

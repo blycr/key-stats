@@ -44,7 +44,7 @@
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"></div>
     
     <!-- Modal card -->
-    <div class="relative w-[360px] bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] overflow-hidden animate-modal-in">
+    <div class="relative w-[360px] bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-2xl shadow-[var(--shadow-modal)] overflow-hidden animate-modal-in">
         <!-- Top accent line -->
         <div class="h-0.5 w-full bg-gradient-to-r from-transparent via-accent/50 to-transparent"></div>
         

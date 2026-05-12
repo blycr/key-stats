@@ -4,6 +4,7 @@
     import Modal from './components/Modal.svelte';
     import SettingsPanel from './components/SettingsPanel.svelte';
     import { WindowHide, Quit } from '../wailsjs/runtime/runtime.js';
+    import { applyTheme, setupAutoTheme } from './theme.js';
 
     // Default empty data structure
     let statsData = {
@@ -187,12 +188,18 @@
         }
     }
 
+    let cleanupAutoTheme = () => {};
+
     onMount(() => {
-        // Load and apply saved font
+        // Load and apply saved config (theme + font)
         if (window.go?.app?.App?.GetConfig) {
             window.go.app.App.GetConfig().then(cfg => {
                 if (cfg?.fontFamily) {
                     document.documentElement.style.setProperty('--app-font', `"${cfg.fontFamily}", "JetBrains Mono", monospace`);
+                }
+                if (cfg?.theme) {
+                    applyTheme(cfg.theme);
+                    cleanupAutoTheme = setupAutoTheme(cfg.theme);
                 }
             }).catch(() => {});
         }
@@ -221,6 +228,7 @@
         return () => {
             clearInterval(interval);
             window.removeEventListener('resize', saveSize);
+            cleanupAutoTheme();
         };
     });
 </script>
@@ -252,7 +260,7 @@
                     </svg>
                 </button>
                 {#if showDateDropdown}
-                <div class="absolute right-0 top-full mt-1 w-36 bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden z-[300] animate-menu">
+                <div class="absolute right-0 top-full mt-1 w-36 bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-xl shadow-[var(--shadow-dropdown)] overflow-hidden z-[300] animate-menu">
                     {#each dateOptions as opt}
                     <button class="w-full px-3 py-2 text-xs text-left transition-colors {dateRange === opt.label ? 'text-text-primary bg-surface-overlay/40' : 'text-text-secondary hover:text-text-primary hover:bg-surface-overlay/30'}"
                         on:click|stopPropagation={() => selectDateRange(opt)}>
@@ -284,7 +292,7 @@
     <!-- Dropdown / context menu -->
     {#if showMenu}
     <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div class="fixed z-[100] w-48 py-1.5 bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/40 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden origin-top-right animate-menu"
+    <div class="fixed z-[100] w-48 py-1.5 bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/40 rounded-xl shadow-[var(--shadow-dropdown)] overflow-hidden origin-top-right animate-menu"
          style={menuMode === 'context' ? `left: ${menuPos.x}px; top: ${menuPos.y}px;` : 'right: 24px; top: 72px;'}
          data-menu
          role="menu"
@@ -328,7 +336,7 @@
             <!-- Total count card -->
             <div class="bg-surface-raised/80 backdrop-blur-lg rounded-2xl p-5 border border-surface-overlay/50 shadow-card flex flex-col gap-1 transition-transform hover:-translate-y-0.5 duration-300">
                 <h2 class="text-[10px] font-bold text-text-tertiary tracking-widest uppercase mb-1">Today's Keystrokes</h2>
-                <div class="text-4xl font-mono text-white font-light flex items-baseline gap-2">
+                <div class="text-4xl font-mono text-text-primary font-light flex items-baseline gap-2">
                     {statsData.totalKeys.toLocaleString()}
                     <span class="text-xs font-mono text-accent font-medium tracking-wide">KEYS</span>
                 </div>

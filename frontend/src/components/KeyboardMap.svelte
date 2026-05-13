@@ -59,10 +59,10 @@
         'Enter': 'Enter',
         'Tab': 'Tab',
         'Space': 'Space',
-        'Shift': 'Shift',
-        'Ctrl': 'Ctrl',
-        'Alt': 'Alt',
-        'Win': 'Win',
+        'Shift': 'Shift', 'LShift': 'Shift', 'RShift': 'Shift',
+        'Ctrl': 'Ctrl', 'LCtrl': 'Ctrl', 'RCtrl': 'Ctrl',
+        'Alt': 'Alt', 'LAlt': 'Alt', 'RAlt': 'Alt',
+        'Win': 'Win', 'LWin': 'Win', 'RWin': 'Win',
         'Fn': 'Fn',
     };
 
@@ -70,13 +70,26 @@
         return keyNameToLabel[name] || name;
     }
 
+    // Two separate reactive blocks to avoid a feedback cycle:
+    //   Block A (set): writes currentFlash when flashKey actually changes (new ts).
+    //   Block B (timeout): starts a 180ms clear timer whenever currentFlash is set.
+    // If both were in one block, currentFlash would be a dependency, and the
+    // setTimeout clearing it would re-trigger the block → flash never fades.
     let currentFlash = '';
-    let flashTimer;
+    const flash = { timer: 0, lastTs: 0 };
 
-    $: if (flashKey.ts && flashKey.name) {
-        currentFlash = normalizeKeyName(flashKey.name);
-        clearTimeout(flashTimer);
-        flashTimer = setTimeout(() => { currentFlash = ''; }, 180);
+    $: {
+        const ts = flashKey.ts;
+        const name = flashKey.name;
+        if (ts && name && ts !== flash.lastTs) {
+            flash.lastTs = ts;
+            currentFlash = normalizeKeyName(name);
+        }
+    }
+
+    $: if (currentFlash) {
+        clearTimeout(flash.timer);
+        flash.timer = setTimeout(() => { currentFlash = ''; }, 180);
     }
 
     import { onMount } from 'svelte';
@@ -88,7 +101,7 @@
         }
         return () => {
             ro.disconnect();
-            clearTimeout(flashTimer);
+            clearTimeout(flash.timer);
         };
     });
 </script>

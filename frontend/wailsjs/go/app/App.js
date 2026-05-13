@@ -10,6 +10,10 @@ export function GetDateRangeStats(arg1, arg2) {
   return window['go']['app']['App']['GetDateRangeStats'](arg1, arg2);
 }
 
+export function GetLatestKeyPress() {
+  return window['go']['app']['App']['GetLatestKeyPress']();
+}
+
 export function GetStats(arg1) {
   return window['go']['app']['App']['GetStats'](arg1);
 }

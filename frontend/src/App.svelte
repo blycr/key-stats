@@ -12,7 +12,9 @@
         topKeys: [],
         appBreakdown: []
     };
-    
+
+    let flashKey = { name: '', ts: 0 };
+
     let isLive = true;
     let showMenu = false;
     let menuPos = { x: 0, y: 0 };
@@ -209,6 +211,22 @@
             if (isLive) fetchLiveStats();
         }, 500);
 
+        // Fast poll for real-time key flash (avoids EventsOn + Svelte 4 conflict)
+        let lastPollTs = 0;
+        async function pollFlash() {
+            if (window.go?.app?.App?.GetLatestKeyPress) {
+                try {
+                    const data = await window.go.app.App.GetLatestKeyPress();
+                    if (data.keyName && data.ts !== lastPollTs) {
+                        lastPollTs = data.ts;
+                        flashKey = { name: data.keyName, ts: data.ts };
+                    }
+                } catch (e) { /* silently ignore */ }
+            }
+        }
+        const flashInterval = setInterval(pollFlash, 100);
+        pollFlash(); // immediate first poll
+
         // Debounced resize listener to persist window size
         const saveSize = debounce(async () => {
             if (window.go?.app?.App?.SaveWindowSize) {
@@ -226,6 +244,7 @@
         window.addEventListener('resize', saveSize);
 
         return () => {
+            clearInterval(flashInterval);
             clearInterval(interval);
             window.removeEventListener('resize', saveSize);
             cleanupAutoTheme();
@@ -408,7 +427,7 @@
                 </h2>
                 
                 <div class="flex-1 flex items-center justify-center">
-                    <KeyboardMap data={statsData.topKeys} />
+                    <KeyboardMap data={statsData.topKeys} flashKey={flashKey} />
                 </div>
             </div>
         </div>

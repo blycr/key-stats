@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"log"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -61,19 +62,20 @@ func getActiveWindowTitle() string {
 }
 
 type KeyboardService struct {
-	db       *db.DB
-	hook     uintptr
-	active   bool
-	emit     func(eventName string, data ...interface{})
-	rtChan   chan map[string]interface{}
-	rtCtx    context.Context
-	rtCancel context.CancelFunc
+	db            *db.DB
+	hook          uintptr
+	active        bool
+	rtChan        chan map[string]interface{}
+	rtCtx         context.Context
+	rtCancel      context.CancelFunc
+	mu            sync.Mutex
+	latestKeyName string
+	latestKeyTs   int64
 }
 
-func NewKeyboardService(database *db.DB, emit func(string, ...interface{})) *KeyboardService {
+func NewKeyboardService(database *db.DB) *KeyboardService {
 	return &KeyboardService{
 		db:     database,
-		emit:   emit,
 		rtChan: make(chan map[string]interface{}, 256),
 	}
 }
@@ -86,10 +88,9 @@ func (s *KeyboardService) Start() {
 	globalService = s
 	s.rtCtx, s.rtCancel = context.WithCancel(context.Background())
 
-	// Start a dedicated goroutine to safely emit real-time events.
-	// runtime.EventsEmit must NOT be called from the syscall callback (hookProc)
-	// because the Go scheduler cannot safely handle blocking/channel operations
-	// on the Windows callback thread.
+	// Start a dedicated goroutine to drain rtChan and prevent backpressure.
+	// rtChan is written to from hookProc (non-blocking); rtEmitter drains it.
+	// We intentionally do NOT emit events to JS — polling avoids Svelte 4 conflicts.
 	go s.rtEmitter()
 
 	go func() {
@@ -136,23 +137,30 @@ func (s *KeyboardService) Start() {
 	}()
 }
 
-// rtEmitter runs in its own goroutine and safely calls emit() for each
-// real-time key event. This avoids calling runtime.EventsEmit from the
-// Windows syscall callback thread.
+// rtEmitter drains rtChan to prevent the channel from filling up in hookProc.
+// We intentionally do NOT call runtime.EventsEmit here — emitting custom events
+// from Go interferes with Svelte 4's document-level event delegation, causing
+// button unresponsiveness and broken reactivity. The frontend polls GetLatestKeyPress()
+// at 100ms instead.
 func (s *KeyboardService) rtEmitter() {
 	for {
 		select {
 		case <-s.rtCtx.Done():
 			return
-		case ev, ok := <-s.rtChan:
+		case _, ok := <-s.rtChan:
 			if !ok {
 				return
 			}
-			if s.emit != nil {
-				s.emit("key-pressed", ev)
-			}
 		}
 	}
+}
+
+// GetLatestKey returns the most recent key press name and timestamp (ms).
+// Returns empty string and 0 if no key has been pressed yet.
+func (s *KeyboardService) GetLatestKey() (string, int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.latestKeyName, s.latestKeyTs
 }
 
 func (s *KeyboardService) Stop() {
@@ -188,8 +196,8 @@ func hookProc(nCode int32, wParam uintptr, lParam uintptr) uintptr {
 			}
 
 			// Queue real-time event via non-blocking channel send.
-			// hookProc runs on a Windows callback thread; we must not call
-			// runtime.EventsEmit here. The rtEmitter goroutine handles it.
+			// hookProc runs on a Windows callback thread; keep this fast.
+			// The rtEmitter goroutine drains rtChan. Frontend polls GetLatestKeyPress().
 			if globalService != nil && globalService.active {
 				name := stats.VKToName(vk)
 				select {
@@ -200,6 +208,10 @@ func hookProc(nCode int32, wParam uintptr, lParam uintptr) uintptr {
 				default:
 					// Channel full — drop real-time event to avoid blocking hook
 				}
+				globalService.mu.Lock()
+				globalService.latestKeyName = name
+				globalService.latestKeyTs = time.Now().UnixNano() / int64(time.Millisecond)
+				globalService.mu.Unlock()
 			}
 		}
 	}

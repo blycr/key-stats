@@ -15,7 +15,6 @@ import (
 	"key-stats/internal/stats"
 	"key-stats/pkg/tray"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -55,9 +54,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.database = d
 
 	// 3. Start Keyboard Logger
-	a.keyboard = service.NewKeyboardService(d, func(name string, data ...interface{}) {
-		runtime.EventsEmit(ctx, name, data...)
-	})
+	a.keyboard = service.NewKeyboardService(d)
 	a.keyboard.Start()
 
 	// 4. Start system tray
@@ -156,6 +153,17 @@ func (a *App) ResetStats() error {
 		return fmt.Errorf("database not initialized")
 	}
 	return a.database.Reset()
+}
+
+// GetLatestKeyPress returns the most recent key press (name + timestamp) for
+// real-time flash feedback on the keyboard heatmap. Returns zero values if no
+// key has been pressed yet.
+func (a *App) GetLatestKeyPress() map[string]interface{} {
+	if a.keyboard == nil {
+		return map[string]interface{}{"keyName": "", "ts": int64(0)}
+	}
+	name, ts := a.keyboard.GetLatestKey()
+	return map[string]interface{}{"keyName": name, "ts": ts}
 }
 
 // -- Font API --

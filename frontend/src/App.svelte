@@ -52,6 +52,11 @@
         };
     }
 
+    // Pre-compute the max count so the progress bar loop is O(N) instead of O(N²)
+    $: maxKeyCount = statsData.topKeys.length > 0
+        ? Math.max(...statsData.topKeys.map(k => k.count))
+        : 1;
+
     async function fetchLiveStats() {
         if (!window.go?.app?.App?.GetTodayStats) {
             console.warn("Go backend not available — stats will be empty");
@@ -381,7 +386,7 @@
                             <!-- Progress bar -->
                             <div class="flex-1 h-1.5 bg-surface-overlay/30 rounded-full overflow-hidden relative">
                                 <div class="absolute left-0 top-0 h-full bg-accent transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(108,99,255,0.5)]" 
-                                     style="width: {(key.count / Math.max(...statsData.topKeys.map(k => k.count), 1)) * 100}%">
+                                     style="width: {(key.count / maxKeyCount) * 100}%">
                                 </div>
                             </div>
                             

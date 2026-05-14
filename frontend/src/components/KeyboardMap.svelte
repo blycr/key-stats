@@ -12,10 +12,19 @@
 
     $: maxCount = Math.max(...data.map(d => d.count), 1);
 
+    // Build a Map for O(1) key lookups instead of O(N) linear search per key cap.
+    $: countMap = (() => {
+        const m = new Map();
+        for (const d of data) {
+            if (d.keyName) {
+                m.set(d.keyName.toUpperCase(), d.count);
+            }
+        }
+        return m;
+    })();
+
     function getCount(keyLabel) {
-        if (!data || data.length === 0) return 0;
-        const d = data.find(item => item.keyName && item.keyName.toUpperCase() === keyLabel.toUpperCase());
-        return d ? d.count : 0;
+        return countMap.get(keyLabel.toUpperCase()) || 0;
     }
 
     function getHeatColor(count) {

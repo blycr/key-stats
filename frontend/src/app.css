@@ -56,8 +56,9 @@
   transition:
     background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
     color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    border-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    border-color 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  /* box-shadow removed: animating it on every element causes unnecessary
+     compositing overhead, especially during rapid stat updates. */
 }
 
 body {

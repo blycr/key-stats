@@ -35,13 +35,16 @@ func GetDateRangeSummary(db *sql.DB, startDaysAgo, endDaysAgo int) (models.Today
 	}
 
 	// Top Keys
+	// We fetch up to 200 rows here because VKToName() collapses multiple
+	// key_codes (e.g. numpad digits vs main-row digits) into the same
+	// display name. A small LIMIT could truncate keys that should merge.
 	query = fmt.Sprintf(`
 		SELECT key_code, COUNT(*) as count
 		FROM key_events
 		WHERE %s
 		GROUP BY key_code
 		ORDER BY count DESC
-		LIMIT 50
+		LIMIT 200
 	`, dateFilter)
 	rows, err := db.Query(query)
 	if err != nil {

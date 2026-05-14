@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"log"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -37,6 +38,14 @@ var (
 
 	// Global instance to be used by the Win32 callback
 	globalService *KeyboardService
+
+	// Reusable UTF-16 buffer pool for getActiveWindowTitle to reduce GC pressure.
+	titleBufPool = sync.Pool{
+		New: func() interface{} {
+			b := make([]uint16, 256)
+			return &b
+		},
+	}
 )
 
 func getActiveWindowTitle() string {
@@ -51,13 +60,16 @@ func getActiveWindowTitle() string {
 		return "Unknown"
 	}
 
-	buf := make([]uint16, 256)
+	bufPtr := titleBufPool.Get().(*[]uint16)
+	buf := *bufPtr
 	ret, _, _ := getWindowTextW.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
-	if ret == 0 {
-		return "Unknown"
+	title := "Unknown"
+	if ret > 0 {
+		// UTF16ToString scans for the null terminator, so the full backing slice is safe.
+		title = syscall.UTF16ToString(buf)
 	}
-
-	return syscall.UTF16ToString(buf)
+	titleBufPool.Put(bufPtr)
+	return title
 }
 
 type KeyboardService struct {

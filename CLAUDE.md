@@ -67,21 +67,27 @@ key-stats\
 │       ├── main.js
 │       ├── app.css
 │       ├── App.svelte          # Main layout, title bar, menus, modals, polling loop
+│       ├── api.js              # Single wrapper around window.go.app.App bindings
+│       ├── theme.js            # Theme + font application, auto-theme listener lifecycle
 │       └── components\
 │           ├── KeyboardMap.svelte  # QWERTY heatmap with auto-scaling via ResizeObserver
 │           ├── Modal.svelte        # Glassmorphism dialog (info/confirm modes)
+│           ├── ModalShell.svelte   # Shared modal shell (overlay + card + accent)
+│           ├── Dropdown.svelte     # Shared trigger+chevron+menu dropdown
 │           └── SettingsPanel.svelte # Theme, startup toggles, saves via Go config API
 ├── internal\
 │   ├── config\
-│   │   └── config.go           # .env-based config + window size persistence
+│   │   └── config.go           # .env-based config + in-memory Manager + window size persistence
 │   ├── db\
 │   │   └── sqlite.go           # SQLite init + batch writer goroutine
 │   ├── models\
 │   │   └── models.go           # KeyEvent, DailyStats, TopKey, AppBreakdown structs
 │   ├── service\
-│   │   └── keyboard.go         # Win32 WH_KEYBOARD_LL hook + message pump goroutine
-│   └── stats\
-│       └── stats.go            # VK code -> key name mapping (F1-F24, media keys, etc.)
+│   │   └── keyboard.go         # Win32 WH_KEYBOARD_LL hook + message pump goroutine + pause
+│   ├── stats\
+│   │   └── stats.go            # VK code -> key name mapping (F1-F24, media keys, etc.)
+│   └── win32\
+│       └── win32.go            # Shared Win32 procs, MSG struct, FindMainWindow
 └── pkg\
     ├── app\
     │   ├── app.go              # App struct: Startup, Shutdown, GetTodayStats, ResetStats, etc.
@@ -97,8 +103,7 @@ Wails v2 desktop app. Go backend embedded in a WebView2 (Chromium) renderer. Fra
 **Data flow:**
 1. Win32 `WH_KEYBOARD_LL` hook (`internal\service\keyboard.go`) captures keystrokes globally from a dedicated goroutine with its own message pump
 2. Events pushed to buffered channel (cap 4096) -> batch writer goroutine flushes to SQLite every 500ms or 256 events
-3. Real-time events queued to separate `rtChan` (cap 256) -> `rtEmitter` goroutine calls `runtime.EventsEmit` (never call emit from the hook callback thread)
-4. Frontend polls `GetTodayStats()` every 500ms via `setInterval`
+3. Frontend polls `GetTodayStats()` every 500ms via `setInterval` (guarded by an in-flight flag); the Live/Paused toggle calls `SetPaused` so the recorder itself stops, not just the poll
 
 **Go -> JS binding:** All exported methods on `pkg\app\App` struct are auto-bound to `window.go.app.App.*` by Wails.
 
@@ -114,11 +119,11 @@ Wails v2 desktop app. Go backend embedded in a WebView2 (Chromium) renderer. Fra
 
 **Do NOT use document-level event listeners:** Svelte 4 uses event delegation (single document-level listener for clicks). Adding `document.addEventListener('click', ...)` or using `EventsOn` from the Wails runtime causes conflicts with Svelte's event processing, making buttons unresponsive. Use Svelte's `on:click` handlers exclusively. For "click outside" patterns, use `on:click` on a parent element with target checking (see `handleMainClick` in App.svelte).
 
-**Windows hook callback safety:** `hookProc` runs on a Windows callback thread. Never call `runtime.EventsEmit` or do blocking operations directly. Use non-blocking channel sends to `rtChan`; the `rtEmitter` goroutine handles emission.
+**Windows hook callback safety:** `hookProc` runs on a Windows callback thread. Never call `runtime.EventsEmit`, `log.Print`, or blocking operations directly. When the event buffer is full, `PushEvent` only bumps an atomic drop counter (logged by the batch writer), and `getActiveWindowTitle` caches the title by foreground hwnd to avoid per-keystroke cross-process `WM_GETTEXT`.
 
-**SQLite:** Uses `modernc.org/sqlite` (pure Go, no CGO). WAL mode enabled. Data at `%APPDATA%\key-stats\data.db`.
+**SQLite:** Uses `modernc.org/sqlite` (pure Go, no CGO). WAL mode enabled, pool limited to one connection so `synchronous=NORMAL` always applies. Data at `%APPDATA%\key-stats\data.db`.
 
-**Config:** `.env`-based config via `internal\config`. Supports `PORTABLE_MODE`, `START_MINIMIZED`, `AUTO_START`, `THEME`, `FONT_FAMILY`, `WINDOW_WIDTH`, `WINDOW_HEIGHT`.
+**Config:** `.env`-based config via `internal\config`. Supports `PORTABLE_MODE`, `START_MINIMIZED` (hides to tray on launch), `AUTO_START` (Windows Run key), `THEME`, `FONT_FAMILY`, `WINDOW_WIDTH`, `WINDOW_HEIGHT`. Reads/writes go through an in-memory `config.Manager` (serialized, no lost updates); app bindings call `GetConfig`/`SetConfig`/`SaveWindowSize`.
 
 **System tray:** `pkg\tray\tray_windows.go` uses `getlantern/systray`. Must call `Quit()` on shutdown before closing DB.
 

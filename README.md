@@ -163,9 +163,7 @@ Event Channel (buffered, cap 4096)
     ↓
 Batch Writer (goroutine) — 500 ms / 256 events → SQLite (WAL)
     ↑
-Real-time Events → rtChan (cap 256) → rtEmitter → runtime.EventsEmit
-    ↑
-Wails Frontend ←—— 500 ms poll ——→ Svelte + Tailwind
+Wails Frontend ←—— 500 ms poll (in-flight guarded) ——→ Svelte + Tailwind
 ```
 
 ## License

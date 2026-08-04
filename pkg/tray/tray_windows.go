@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"unsafe"
 
+	"key-stats/internal/win32"
+
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -36,7 +38,7 @@ var (
 	kernel32             = syscall.NewLazyDLL("kernel32.dll")
 	procGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
 
-	shell32            = syscall.NewLazyDLL("shell32.dll")
+	shell32              = syscall.NewLazyDLL("shell32.dll")
 	procShellNotifyIconW = shell32.NewProc("Shell_NotifyIconW")
 	procExtractIconExW   = shell32.NewProc("ExtractIconExW")
 )
@@ -81,15 +83,6 @@ type wndClassEx struct {
 type point struct {
 	X int32
 	Y int32
-}
-
-type msg struct {
-	Hwnd    uintptr
-	Message uint32
-	WParam  uintptr
-	LParam  uintptr
-	Time    uint32
-	Pt      point
 }
 
 type notifyIconData struct {
@@ -186,7 +179,7 @@ func (t *Tray) runMessageLoop() {
 	t.addTrayIcon()
 
 	// Message loop
-	var m msg
+	var m win32.MSG
 	for {
 		ret, _, _ := procGetMessageW.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
 		if ret == 0 {

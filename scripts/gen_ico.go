@@ -59,8 +59,8 @@ func main() {
 	var out bytes.Buffer
 
 	// ICO header
-	binary.Write(&out, binary.LittleEndian, uint16(0))     // Reserved
-	binary.Write(&out, binary.LittleEndian, uint16(1))     // Type: ICO
+	binary.Write(&out, binary.LittleEndian, uint16(0))           // Reserved
+	binary.Write(&out, binary.LittleEndian, uint16(1))           // Type: ICO
 	binary.Write(&out, binary.LittleEndian, uint16(len(frames))) // Count
 
 	// Directory entries
@@ -75,9 +75,9 @@ func main() {
 		}
 		out.WriteByte(byte(w))
 		out.WriteByte(byte(h))
-		out.WriteByte(0) // Colors
-		out.WriteByte(0) // Reserved
-		binary.Write(&out, binary.LittleEndian, uint16(1)) // Planes
+		out.WriteByte(0)                                    // Colors
+		out.WriteByte(0)                                    // Reserved
+		binary.Write(&out, binary.LittleEndian, uint16(1))  // Planes
 		binary.Write(&out, binary.LittleEndian, uint16(32)) // BPP
 		binary.Write(&out, binary.LittleEndian, uint32(len(f.data)))
 		binary.Write(&out, binary.LittleEndian, uint32(offset))

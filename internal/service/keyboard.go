@@ -1,16 +1,16 @@
 package service
 
 import (
-	"context"
 	"log"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
 
 	"key-stats/internal/db"
 	"key-stats/internal/models"
-	"key-stats/internal/stats"
+	"key-stats/internal/win32"
 )
 
 const (
@@ -28,14 +28,6 @@ type KBDLLHOOKSTRUCT struct {
 }
 
 var (
-	user32              = syscall.NewLazyDLL("user32.dll")
-	setWindowsHookExW   = user32.NewProc("SetWindowsHookExW")
-	unhookWindowsHookEx = user32.NewProc("UnhookWindowsHookEx")
-	callNextHookEx      = user32.NewProc("CallNextHookEx")
-	getMessageW         = user32.NewProc("GetMessageW")
-	getForegroundWindow = user32.NewProc("GetForegroundWindow")
-	getWindowTextW      = user32.NewProc("GetWindowTextW")
-
 	// Global instance to be used by the Win32 callback
 	globalService *KeyboardService
 
@@ -48,46 +40,66 @@ var (
 	}
 )
 
+// getActiveWindowTitle returns the title of the foreground window.
+//
+// GetWindowTextW sends a synchronous WM_GETTEXT across processes, which can
+// block on a busy target window. We cache the title keyed by the foreground
+// hwnd and only issue the syscall when the foreground window actually changes,
+// keeping the hook hot path free of cross-process IPC on every keystroke.
 func getActiveWindowTitle() string {
+	hwnd, _, _ := win32.GetForegroundWindow.Call()
+	if hwnd == 0 {
+		lastHwnd = 0
+		return "Unknown"
+	}
+	if hwnd == lastHwnd {
+		return lastTitle
+	}
+
+	lastHwnd = hwnd
+	lastTitle = "Unknown"
+
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("getActiveWindowTitle recovered: %v", r)
+			lastTitle = "Unknown"
 		}
 	}()
 
-	hwnd, _, _ := getForegroundWindow.Call()
-	if hwnd == 0 {
-		return "Unknown"
-	}
-
 	bufPtr := titleBufPool.Get().(*[]uint16)
 	buf := *bufPtr
-	ret, _, _ := getWindowTextW.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
-	title := "Unknown"
+	ret, _, _ := win32.GetWindowTextW.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
 	if ret > 0 {
 		// UTF16ToString scans for the null terminator, so the full backing slice is safe.
-		title = syscall.UTF16ToString(buf)
+		lastTitle = syscall.UTF16ToString(buf)
 	}
 	titleBufPool.Put(bufPtr)
-	return title
+	return lastTitle
 }
+
+// Cache of (foreground hwnd, title). hookProc runs on a single hook thread, so
+// these are only ever touched from that one goroutine.
+var lastHwnd uintptr
+var lastTitle string
 
 type KeyboardService struct {
-	db       *db.DB
-	hook     uintptr
-	active   bool
-	emit     func(eventName string, data ...interface{})
-	rtChan   chan map[string]interface{}
-	rtCtx    context.Context
-	rtCancel context.CancelFunc
+	db     *db.DB
+	hook   uintptr
+	active bool
+	// paused stops new keystrokes from being recorded when true.
+	paused atomic.Bool
 }
 
-func NewKeyboardService(database *db.DB, emit func(string, ...interface{})) *KeyboardService {
+func NewKeyboardService(database *db.DB) *KeyboardService {
 	return &KeyboardService{
-		db:     database,
-		emit:   emit,
-		rtChan: make(chan map[string]interface{}, 256),
+		db: database,
 	}
+}
+
+// SetPaused controls whether keystrokes are recorded. The frontend "Paused"
+// toggle drives this so the recorder actually stops, not just the UI poll.
+func (s *KeyboardService) SetPaused(p bool) {
+	s.paused.Store(p)
 }
 
 func (s *KeyboardService) Start() {
@@ -96,13 +108,6 @@ func (s *KeyboardService) Start() {
 	}
 	s.active = true
 	globalService = s
-	s.rtCtx, s.rtCancel = context.WithCancel(context.Background())
-
-	// Start a dedicated goroutine to safely emit real-time events.
-	// runtime.EventsEmit must NOT be called from the syscall callback (hookProc)
-	// because the Go scheduler cannot safely handle blocking/channel operations
-	// on the Windows callback thread.
-	go s.rtEmitter()
 
 	go func() {
 		defer func() {
@@ -115,7 +120,7 @@ func (s *KeyboardService) Start() {
 		cb := syscall.NewCallback(hookProc)
 
 		// Install hook
-		hook, _, err := setWindowsHookExW.Call(
+		hook, _, err := win32.SetWindowsHookExW.Call(
 			uintptr(WH_KEYBOARD_LL),
 			cb,
 			0, // No module handle needed for LL hook in Go
@@ -127,44 +132,18 @@ func (s *KeyboardService) Start() {
 		}
 		s.hook = hook
 
-		// Standard Windows message pump
-		var msg struct {
-			Hwnd    uintptr
-			Message uint32
-			WParam  uintptr
-			LParam  uintptr
-			Time    uint32
-			Pt      struct{ X, Y int32 }
-		}
-
+		// Standard Windows message pump. Only GetMessageW is needed to keep the
+		// hook callback firing; no TranslateMessage/DispatchMessage required.
+		var msg win32.MSG
 		for {
-			ret, _, _ := getMessageW.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
+			ret, _, _ := win32.GetMessageW.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
 			if ret == 0 || ret == ^uintptr(0) || !s.active {
 				break
 			}
 		}
 
-		unhookWindowsHookEx.Call(s.hook)
+		win32.UnhookWindowsHookEx.Call(s.hook)
 	}()
-}
-
-// rtEmitter runs in its own goroutine and safely calls emit() for each
-// real-time key event. This avoids calling runtime.EventsEmit from the
-// Windows syscall callback thread.
-func (s *KeyboardService) rtEmitter() {
-	for {
-		select {
-		case <-s.rtCtx.Done():
-			return
-		case ev, ok := <-s.rtChan:
-			if !ok {
-				return
-			}
-			if s.emit != nil {
-				s.emit("key-pressed", ev)
-			}
-		}
-	}
 }
 
 func (s *KeyboardService) Stop() {
@@ -172,11 +151,8 @@ func (s *KeyboardService) Stop() {
 		return
 	}
 	s.active = false
-	if s.rtCancel != nil {
-		s.rtCancel()
-	}
 	if s.hook != 0 {
-		unhookWindowsHookEx.Call(s.hook)
+		win32.UnhookWindowsHookEx.Call(s.hook)
 		s.hook = 0
 	}
 }
@@ -190,31 +166,16 @@ func hookProc(nCode int32, wParam uintptr, lParam uintptr) uintptr {
 
 			vk := int(kbd.VkCode)
 
-			// Push to DB safely
-			if globalService != nil && globalService.db != nil {
+			// Push to DB safely (skipped while paused)
+			if globalService != nil && globalService.db != nil && !globalService.paused.Load() {
 				globalService.db.PushEvent(models.KeyEvent{
 					KeyCode:   vk,
 					AppName:   getActiveWindowTitle(),
 					Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
 				})
 			}
-
-			// Queue real-time event via non-blocking channel send.
-			// hookProc runs on a Windows callback thread; we must not call
-			// runtime.EventsEmit here. The rtEmitter goroutine handles it.
-			if globalService != nil && globalService.active {
-				name := stats.VKToName(vk)
-				select {
-				case globalService.rtChan <- map[string]interface{}{
-					"keyCode": vk,
-					"keyName": name,
-				}:
-				default:
-					// Channel full — drop real-time event to avoid blocking hook
-				}
-			}
 		}
 	}
-	ret, _, _ := callNextHookEx.Call(0, uintptr(nCode), wParam, lParam)
+	ret, _, _ := win32.CallNextHookEx.Call(0, uintptr(nCode), wParam, lParam)
 	return ret
 }

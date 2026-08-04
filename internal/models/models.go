@@ -8,9 +8,9 @@ type KeyEvent struct {
 }
 
 type TodaySummary struct {
-	TotalKeys    int          `json:"totalKeys"`
-	TopKeys      []KeyCount   `json:"topKeys"`
-	AppBreakdown []AppCount   `json:"appBreakdown"`
+	TotalKeys    int        `json:"totalKeys"`
+	TopKeys      []KeyCount `json:"topKeys"`
+	AppBreakdown []AppCount `json:"appBreakdown"`
 }
 
 type KeyCount struct {

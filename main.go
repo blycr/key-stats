@@ -25,16 +25,11 @@ func main() {
 
 	// Restore saved window size (or use defaults)
 	cfg, err := config.Load()
-	if err != nil {
-		log.Printf("Failed to load config: %v", err)
+	if err != nil || cfg == nil {
+		log.Printf("Failed to load config, using defaults: %v", err)
+		cfg = config.Default()
 	}
 	width, height := cfg.WindowWidth, cfg.WindowHeight
-	if width == 0 {
-		width = 1280
-	}
-	if height == 0 {
-		height = 800
-	}
 
 	err = wails.Run(&options.App{
 		Title:     "KeyStats",
@@ -47,7 +42,7 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 28, G: 28, B: 30, A: 1},
 		OnStartup:        application.Startup,
-		OnDomReady:       func(ctx context.Context) { application.SetWindowIcon() },
+		OnDomReady:       func(ctx context.Context) { application.SetWindowIcon(); application.ApplyStartupOptions() },
 		OnShutdown:       application.Shutdown,
 		Frameless:        true,
 		Windows: &windows.Options{

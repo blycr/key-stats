@@ -6,6 +6,16 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+)
+
+const (
+	// AppDirName is the application folder used under the user config dir.
+	AppDirName = "key-stats"
+
+	// DefaultWindowWidth / DefaultWindowHeight are the factory window size.
+	DefaultWindowWidth  = 1280
+	DefaultWindowHeight = 800
 )
 
 // AppConfig holds all application settings.
@@ -27,11 +37,11 @@ type AppConfig struct {
 	PortableMode bool
 }
 
-// defaults returns a new config with factory defaults.
-func defaults() *AppConfig {
+// Default returns a new config with factory defaults.
+func Default() *AppConfig {
 	return &AppConfig{
-		WindowWidth:    1280,
-		WindowHeight:   800,
+		WindowWidth:    DefaultWindowWidth,
+		WindowHeight:   DefaultWindowHeight,
 		Theme:          "dark",
 		FontFamily:     "JetBrains Mono",
 		StartMinimized: false,
@@ -43,8 +53,8 @@ func defaults() *AppConfig {
 // envPath returns the absolute path to the .env file.
 //
 // Priority rule (when both locations have .env):
-//   1. Portable: if .env exists next to the executable → use it (portable mode).
-//   2. Roaming:  otherwise → use %APPDATA%/key-stats/.env.
+//  1. Portable: if .env exists next to the executable → use it (portable mode).
+//  2. Roaming:  otherwise → use %APPDATA%/key-stats/.env.
 //
 // This means portable always wins when both are present. To force roaming mode,
 // delete the .env file next to the executable.
@@ -57,7 +67,7 @@ func envPath() string {
 		}
 	}
 	dir, _ := os.UserConfigDir()
-	return filepath.Join(dir, "key-stats", ".env")
+	return filepath.Join(dir, AppDirName, ".env")
 }
 
 // DataDir returns the directory for SQLite and other data files.
@@ -71,7 +81,7 @@ func DataDir() (string, error) {
 		}
 	}
 	dir, _ := os.UserConfigDir()
-	return filepath.Join(dir, "key-stats"), nil
+	return filepath.Join(dir, AppDirName), nil
 }
 
 // Load reads configuration from the .env file.
@@ -79,12 +89,12 @@ func Load() (*AppConfig, error) {
 	data, err := os.ReadFile(envPath())
 	if err != nil {
 		if os.IsNotExist(err) {
-			return defaults(), nil
+			return Default(), nil
 		}
 		return nil, err
 	}
 
-	cfg := defaults()
+	cfg := Default()
 	lines := strings.Split(string(data), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -240,4 +250,50 @@ func toBool(v interface{}) bool {
 		return val != 0
 	}
 	return false
+}
+
+// Manager keeps a single in-memory copy of the config so reads avoid re-parsing
+// the .env file and writes are serialized (no lost updates between concurrent
+// SetConfig / SaveWindowSize calls).
+type Manager struct {
+	mu  sync.RWMutex
+	cfg *AppConfig
+}
+
+// NewManager loads the config once and returns a Manager backed by it.
+func NewManager() (*Manager, error) {
+	cfg, err := Load()
+	if err != nil {
+		return nil, err
+	}
+	return &Manager{cfg: cfg}, nil
+}
+
+// Get returns a shallow copy of the current config.
+func (m *Manager) Get() AppConfig {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return *m.cfg
+}
+
+// Update applies a flat map of changes and persists the file when anything changed.
+func (m *Manager) Update(updates map[string]interface{}) ([]string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	changed := m.cfg.UpdateFromMap(updates)
+	if len(changed) > 0 {
+		if err := Save(m.cfg); err != nil {
+			return nil, err
+		}
+	}
+	return changed, nil
+}
+
+// SetWindowSize updates and persists the window dimensions.
+func (m *Manager) SetWindowSize(width, height int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cfg.WindowWidth = width
+	m.cfg.WindowHeight = height
+	return Save(m.cfg)
 }

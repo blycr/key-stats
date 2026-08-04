@@ -6,8 +6,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"time"
 
+	"key-stats/internal/config"
 	"key-stats/internal/models"
 
 	_ "modernc.org/sqlite"
@@ -18,6 +21,11 @@ type DB struct {
 	eventChan  chan models.KeyEvent
 	ctx        context.Context
 	cancelFunc context.CancelFunc
+	wg         sync.WaitGroup
+
+	// dropCount counts events dropped when eventChan is full, aggregated so the
+	// hook callback thread never performs I/O (log writes) under buffer pressure.
+	dropCount atomic.Int64
 }
 
 func InitDB(dataDir string) (*DB, error) {
@@ -27,7 +35,7 @@ func InitDB(dataDir string) (*DB, error) {
 		if err != nil {
 			return nil, err
 		}
-		dataDir = filepath.Join(dataDir, "key-stats")
+		dataDir = filepath.Join(dataDir, config.AppDirName)
 	}
 
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
@@ -39,6 +47,11 @@ func InitDB(dataDir string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Single connection: PRAGMA settings are per-connection, so limiting the pool
+	// guarantees synchronous=NORMAL (and WAL) apply to every query. This app has
+	// no need for parallel connections.
+	conn.SetMaxOpenConns(1)
+	conn.SetMaxIdleConns(1)
 
 	// PRAGMA for SQLite WAL mode and performance
 	if _, err := conn.Exec("PRAGMA journal_mode=WAL;"); err != nil {
@@ -70,6 +83,7 @@ func InitDB(dataDir string) (*DB, error) {
 		cancelFunc: cancel,
 	}
 
+	d.wg.Add(1)
 	go d.batchWriter()
 	return d, nil
 }
@@ -78,8 +92,9 @@ func (d *DB) PushEvent(e models.KeyEvent) {
 	select {
 	case d.eventChan <- e:
 	default:
-		// Drop event safely if buffer is full, prevents memory leak & hook blocking
-		log.Println("[Warning] Event buffer full, dropping key event")
+		// Drop event safely if buffer is full, prevents memory leak & hook blocking.
+		// Only bump a counter here — logging on the hook callback thread would block.
+		d.dropCount.Add(1)
 	}
 }
 
@@ -94,9 +109,11 @@ func (d *DB) Reset() error {
 }
 
 func (d *DB) Close() {
+	// Stop the writer first so it flushes its in-flight batch, then drain what's
+	// still in the channel — no collected keystroke is dropped on shutdown.
 	d.cancelFunc()
+	d.wg.Wait()
 	close(d.eventChan)
-	// Ensure the remaining events in channel are flushed before close
 	var remaining []models.KeyEvent
 	for e := range d.eventChan {
 		remaining = append(remaining, e)
@@ -106,11 +123,11 @@ func (d *DB) Close() {
 }
 
 func (d *DB) batchWriter() {
-	// Recover to prevent background worker crash bringing down the whole application
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("batchWriter recovered from panic: %v", r)
 		}
+		d.wg.Done()
 	}()
 
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -121,6 +138,9 @@ func (d *DB) batchWriter() {
 	for {
 		select {
 		case <-d.ctx.Done():
+			if len(batch) > 0 {
+				d.flush(batch)
+			}
 			return
 		case e, ok := <-d.eventChan:
 			if !ok {
@@ -135,6 +155,9 @@ func (d *DB) batchWriter() {
 			if len(batch) > 0 {
 				d.flush(batch)
 				batch = nil
+			}
+			if n := d.dropCount.Swap(0); n > 0 {
+				log.Printf("[Warning] Event buffer full, dropped %d key events", n)
 			}
 		}
 	}

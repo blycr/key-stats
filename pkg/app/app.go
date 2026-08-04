@@ -2,17 +2,18 @@ package app
 
 import (
 	"context"
-	"fmt"
+	"database/sql"
+	"errors"
 	"log"
+	"os"
 	"strings"
-	"syscall"
-	"unsafe"
 
 	"key-stats/internal/config"
 	"key-stats/internal/db"
 	"key-stats/internal/models"
 	"key-stats/internal/service"
 	"key-stats/internal/stats"
+	"key-stats/internal/win32"
 	"key-stats/pkg/tray"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -21,10 +22,11 @@ import (
 
 // App struct
 type App struct {
-	ctx      context.Context
-	database *db.DB
-	keyboard *service.KeyboardService
-	trayMgr  *tray.Tray
+	ctx           context.Context
+	database      *db.DB
+	keyboard      *service.KeyboardService
+	trayMgr       *tray.Tray
+	configManager *config.Manager
 }
 
 // NewApp creates a new App application struct
@@ -55,12 +57,13 @@ func (a *App) Startup(ctx context.Context) {
 	a.database = d
 
 	// 3. Start Keyboard Logger
-	a.keyboard = service.NewKeyboardService(d, func(name string, data ...interface{}) {
-		runtime.EventsEmit(ctx, name, data...)
-	})
+	a.keyboard = service.NewKeyboardService(d)
 	a.keyboard.Start()
 
-	// 4. Start system tray
+	// 4. Load config once into memory (serializes reads/writes)
+	a.configManager, _ = config.NewManager()
+
+	// 5. Start system tray
 	a.trayMgr.Run(ctx,
 		func() { tray.ShowWindow(ctx) },
 		func() { tray.QuitApp(ctx) },
@@ -82,30 +85,58 @@ func (a *App) Shutdown(ctx context.Context) {
 	}
 }
 
-// -- Settings API (extensible) --
+// ApplyStartupOptions applies behavior flags from config (e.g. StartMinimized).
+// Called once the window is ready so hiding works reliably.
+func (a *App) ApplyStartupOptions() {
+	m := a.ensureConfig()
+	if m == nil {
+		return
+	}
+	if m.Get().StartMinimized {
+		runtime.WindowHide(a.ctx)
+	}
+}
+
+// ensureConfig lazily initializes the in-memory config manager.
+func (a *App) ensureConfig() *config.Manager {
+	if a.configManager == nil {
+		a.configManager, _ = config.NewManager()
+	}
+	return a.configManager
+}
+
+// -- Settings API --
 
 // GetConfig returns the current application configuration as a flat map.
 // The frontend can iterate this to render a dynamic settings UI.
 func (a *App) GetConfig() (map[string]interface{}, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, err
+	m := a.ensureConfig()
+	if m == nil {
+		return nil, errors.New("config unavailable")
 	}
-	return cfg.ToMap(), nil
+	cfg := m.Get()
+	result := cfg.ToMap()
+	if dir, err := config.DataDir(); err == nil {
+		result["dataDir"] = dir
+	}
+	return result, nil
 }
 
 // SetConfig updates configuration fields from a flat map and persists to .env.
 // Only keys present in the map are updated; others remain untouched.
 // Returns the list of keys that were actually changed.
 func (a *App) SetConfig(updates map[string]interface{}) ([]string, error) {
-	cfg, err := config.Load()
+	m := a.ensureConfig()
+	if m == nil {
+		return nil, errors.New("config unavailable")
+	}
+	changed, err := m.Update(updates)
 	if err != nil {
 		return nil, err
 	}
-	changed := cfg.UpdateFromMap(updates)
-	if len(changed) > 0 {
-		if err := config.Save(cfg); err != nil {
-			return nil, err
+	for _, key := range changed {
+		if key == "autoStart" {
+			applyAutoStart(m.Get().AutoStart)
 		}
 	}
 	return changed, nil
@@ -113,47 +144,81 @@ func (a *App) SetConfig(updates map[string]interface{}) ([]string, error) {
 
 // SaveWindowSize persists the current window dimensions.
 func (a *App) SaveWindowSize(width, height int) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return err
+	m := a.ensureConfig()
+	if m == nil {
+		return errors.New("config unavailable")
 	}
-	cfg.WindowWidth = width
-	cfg.WindowHeight = height
-	return config.Save(cfg)
+	return m.SetWindowSize(width, height)
+}
+
+// SetPaused forwards the Live/Paused toggle to the keyboard recorder so that
+// pausing actually stops recording, not just the frontend polling.
+func (a *App) SetPaused(paused bool) {
+	if a.keyboard != nil {
+		a.keyboard.SetPaused(paused)
+	}
+}
+
+// applyAutoStart registers or removes KeyStats in the Windows Run key.
+func applyAutoStart(enabled bool) {
+	const runKey = `Software\Microsoft\Windows\CurrentVersion\Run`
+	k, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.QUERY_VALUE|registry.SET_VALUE)
+	if err != nil {
+		log.Printf("Failed to open Run key: %v", err)
+		return
+	}
+	defer k.Close()
+
+	if enabled {
+		exe, err := os.Executable()
+		if err != nil {
+			log.Printf("Failed to resolve executable: %v", err)
+			return
+		}
+		if err := k.SetStringValue("KeyStats", exe); err != nil {
+			log.Printf("Failed to set autostart: %v", err)
+		}
+		return
+	}
+	if err := k.DeleteValue("KeyStats"); err != nil && err != registry.ErrNotExist {
+		log.Printf("Failed to clear autostart: %v", err)
+	}
 }
 
 // -- Stats API --
 
-// GetTodayStats returns aggregate stats for the current day.
-func (a *App) GetTodayStats() (models.TodaySummary, error) {
+// conn returns the SQL connection, guarding against the not-yet-initialized case.
+func (a *App) conn() (*sql.DB, error) {
 	if a.database == nil {
-		return models.TodaySummary{}, fmt.Errorf("database not initialized")
+		return nil, errors.New("database not initialized")
 	}
-	return stats.GetTodaySummary(a.database.GetConn())
+	return a.database.GetConn(), nil
 }
 
-// GetStats returns aggregate stats for a given day offset (0=today, 1=yesterday, etc.).
-func (a *App) GetStats(daysAgo int) (models.TodaySummary, error) {
-	if a.database == nil {
-		return models.TodaySummary{}, fmt.Errorf("database not initialized")
+// GetTodayStats returns aggregate stats for the current day.
+func (a *App) GetTodayStats() (models.TodaySummary, error) {
+	conn, err := a.conn()
+	if err != nil {
+		return models.TodaySummary{}, err
 	}
-	return stats.GetStatsSummary(a.database.GetConn(), daysAgo)
+	return stats.GetDateRangeSummary(conn, 0, 0)
 }
 
 // GetDateRangeStats returns aggregate stats for a date range (inclusive).
 // startDaysAgo is the older date, endDaysAgo is the newer date.
 // Example: GetDateRangeStats(7, 0) returns stats for the last 7 days including today.
 func (a *App) GetDateRangeStats(startDays, endDays int) (models.TodaySummary, error) {
-	if a.database == nil {
-		return models.TodaySummary{}, fmt.Errorf("database not initialized")
+	conn, err := a.conn()
+	if err != nil {
+		return models.TodaySummary{}, err
 	}
-	return stats.GetDateRangeSummary(a.database.GetConn(), startDays, endDays)
+	return stats.GetDateRangeSummary(conn, startDays, endDays)
 }
 
 // ResetStats clears all recorded keystroke statistics from the database.
 func (a *App) ResetStats() error {
 	if a.database == nil {
-		return fmt.Errorf("database not initialized")
+		return errors.New("database not initialized")
 	}
 	return a.database.Reset()
 }
@@ -218,20 +283,13 @@ func (a *App) GetSystemFonts() ([]string, error) {
 
 // SetWindowIcon loads the embedded icon and sets it on the Wails window.
 func (a *App) SetWindowIcon() {
-	user32 := syscall.NewLazyDLL("user32.dll")
-	kernel32 := syscall.NewLazyDLL("kernel32.dll")
-	procLoadImageW := user32.NewProc("LoadImageW")
-	procFindWindowW := user32.NewProc("FindWindowW")
-	procSendMessageW := user32.NewProc("SendMessageW")
-	procGetModuleHandleW := kernel32.NewProc("GetModuleHandleW")
-
-	hInstance, _, _ := procGetModuleHandleW.Call(0)
+	hInstance, _, _ := win32.GetModuleHandleW.Call(0)
 	if hInstance == 0 {
 		return
 	}
 
 	const iconResID = 1
-	hIcon, _, _ := procLoadImageW.Call(
+	hIcon, _, _ := win32.LoadImageW.Call(
 		hInstance,
 		uintptr(iconResID),
 		uintptr(1), // IMAGE_ICON
@@ -242,17 +300,11 @@ func (a *App) SetWindowIcon() {
 		return
 	}
 
-	className, _ := syscall.UTF16PtrFromString("wailsWindow")
-	hwnd, _, _ := procFindWindowW.Call(
-		uintptr(unsafe.Pointer(className)),
-		0,
-	)
+	hwnd := win32.FindMainWindow()
 	if hwnd == 0 {
 		return
 	}
 
-	procSendMessageW.Call(hwnd, uintptr(0x0080), uintptr(1), hIcon) // WM_SETICON, ICON_BIG
-	procSendMessageW.Call(hwnd, uintptr(0x0080), uintptr(0), hIcon) // WM_SETICON, ICON_SMALL
+	win32.SendMessageW.Call(hwnd, uintptr(0x0080), uintptr(1), hIcon) // WM_SETICON, ICON_BIG
+	win32.SendMessageW.Call(hwnd, uintptr(0x0080), uintptr(0), hIcon) // WM_SETICON, ICON_SMALL
 }
-
-

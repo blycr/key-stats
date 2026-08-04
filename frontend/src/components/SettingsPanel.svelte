@@ -3,12 +3,15 @@
     export let show = false;
 
     import { createEventDispatcher } from 'svelte';
-    import { applyTheme } from '../theme.js';
+    import ModalShell from './ModalShell.svelte';
+    import Dropdown from './Dropdown.svelte';
+    import { applyAppearance, DEFAULT_FONT } from '../theme.js';
+    import { api } from '../api.js';
     const dispatch = createEventDispatcher();
 
     let settings = {
         theme: 'dark',
-        fontFamily: 'JetBrains Mono',
+        fontFamily: DEFAULT_FONT,
         startMinimized: false,
         autoStart: false,
         portableMode: false,
@@ -19,24 +22,6 @@
     let showFontDropdown = false;
     let systemFonts = [];
 
-    const presetFonts = [
-        'JetBrains Mono',
-        'Fira Code',
-        'Cascadia Code',
-        'Cascadia Mono',
-        'Source Code Pro',
-        'Consolas',
-        'Monaco',
-        'Menlo',
-        'SF Mono',
-        'DejaVu Sans Mono',
-        'Ubuntu Mono',
-        'IBM Plex Mono',
-        'Space Mono',
-        'Inconsolata',
-        'Courier New'
-    ];
-
     const themeOptions = [
         { value: 'dark', label: 'Dark' },
         { value: 'light', label: 'Light' },
@@ -44,12 +29,11 @@
     ];
 
     async function loadSettings() {
-        if (!window.go?.app?.App?.GetConfig) return;
         try {
-            const cfg = await window.go.app.App.GetConfig();
+            const cfg = await api.getConfig();
             settings = {
                 theme: cfg.theme || 'dark',
-                fontFamily: cfg.fontFamily || 'JetBrains Mono',
+                fontFamily: cfg.fontFamily || DEFAULT_FONT,
                 startMinimized: cfg.startMinimized || false,
                 autoStart: cfg.autoStart || false,
                 portableMode: cfg.portableMode || false,
@@ -62,13 +46,11 @@
     }
 
     async function loadSystemFonts() {
-        if (!window.go?.app?.App?.GetSystemFonts) return;
         try {
-            const fonts = await window.go.app.App.GetSystemFonts();
-            // Merge with presets, deduplicate
-            const all = [...presetFonts, ...fonts];
+            const fonts = await api.getSystemFonts();
+            // GetSystemFonts already returns the preset list first; just dedupe.
             const seen = new Set();
-            systemFonts = all.filter(f => {
+            systemFonts = fonts.filter(f => {
                 const lower = f.toLowerCase();
                 if (seen.has(lower)) return false;
                 seen.add(lower);
@@ -76,23 +58,20 @@
             }).sort();
         } catch (e) {
             console.error('Failed to load system fonts:', e);
-            systemFonts = [...presetFonts];
+            systemFonts = [];
         }
     }
 
     async function saveSettings() {
-        if (!window.go?.app?.App?.SetConfig) return;
         saving = true;
         try {
-            const changed = await window.go.app.App.SetConfig({
+            await api.setConfig({
                 theme: settings.theme,
                 fontFamily: settings.fontFamily,
                 startMinimized: settings.startMinimized,
                 autoStart: settings.autoStart
             });
-            console.log('Config updated:', changed);
-            applyFont(settings.fontFamily);
-            applyTheme(settings.theme);
+            applyAppearance(settings);
             closePanel();
         } catch (e) {
             console.error('Failed to save config:', e);
@@ -101,210 +80,126 @@
         }
     }
 
-    function applyFont(font) {
-        if (!font) return;
-        document.documentElement.style.setProperty('--app-font', `"${font}", "JetBrains Mono", monospace`);
-    }
-
     function closePanel() {
         show = false;
         showThemeDropdown = false;
+        showFontDropdown = false;
         dispatch('close');
     }
 
-    function onKeydown(e) {
-        if (show && e.key === 'Escape') closePanel();
-    }
-
-    function selectTheme(value) {
-        settings.theme = value;
-        showThemeDropdown = false;
-    }
-
-    // Close dropdown when clicking outside the panel or pressing Escape
+    // Close a dropdown when clicking outside the panel
     function onWindowClick(e) {
-        if (showThemeDropdown) {
-            const dropdown = e.target.closest('.theme-dropdown-wrapper');
-            if (!dropdown) showThemeDropdown = false;
+        if (showThemeDropdown && !e.target.closest('.theme-dropdown-wrapper')) {
+            showThemeDropdown = false;
         }
-        if (showFontDropdown) {
-            const dropdown = e.target.closest('.font-dropdown-wrapper');
-            if (!dropdown) showFontDropdown = false;
+        if (showFontDropdown && !e.target.closest('.font-dropdown-wrapper')) {
+            showFontDropdown = false;
         }
     }
 
     $: if (show) loadSettings();
 </script>
 
-<svelte:window on:keydown={onKeydown} on:click={onWindowClick}/>
+<svelte:window on:click={onWindowClick}/>
 
 {#if show}
-<!-- svelte-ignore a11y-no-static-element-interactions -->
-<div class="fixed inset-0 z-[200] flex items-center justify-center" on:click|self={closePanel} on:keydown={onKeydown} role="presentation">
-    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"></div>
+<ModalShell onBackdrop={closePanel} onEscape={closePanel} width="420px">
+    <div class="p-6">
+        <h3 class="text-sm font-semibold text-text-primary mb-1">Settings</h3>
+        <p class="text-[11px] text-text-tertiary mb-5">Changes are saved to .env and take effect on next launch.</p>
 
-    <div class="relative w-[420px] bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-2xl shadow-[var(--shadow-modal)] overflow-hidden animate-modal-in">
-        <div class="h-0.5 w-full bg-gradient-to-r from-transparent via-accent/50 to-transparent"></div>
-
-        <div class="p-6">
-            <h3 class="text-sm font-semibold text-text-primary mb-1">Settings</h3>
-            <p class="text-[11px] text-text-tertiary mb-5">Changes are saved to .env and take effect on next launch.</p>
-
-            <div class="space-y-4">
-                <!-- Theme -->
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-xs text-text-primary">Theme</div>
-                        <div class="text-[10px] text-text-tertiary">Interface color scheme</div>
-                    </div>
-                    <div class="relative theme-dropdown-wrapper">
-                        <button
-                            class="min-w-[100px] flex items-center justify-between gap-2 bg-surface-overlay/60 border border-surface-overlay text-text-primary text-xs rounded-lg px-3 py-1.5 outline-none focus:border-accent transition-colors cursor-pointer"
-                            on:click|stopPropagation={() => { showThemeDropdown = !showThemeDropdown; showFontDropdown = false; }}
-                        >
-                            <span>{themeOptions.find(o => o.value === settings.theme)?.label || settings.theme}</span>
-                            <svg class="w-3.5 h-3.5 text-text-tertiary transition-transform duration-200 {showThemeDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-                            </svg>
-                        </button>
-
-                        {#if showThemeDropdown}
-                        <div class="absolute right-0 top-full mt-1 w-full min-w-[100px] bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-xl shadow-[var(--shadow-dropdown)] overflow-hidden z-[300] animate-dropdown-in">
-                            {#each themeOptions as opt}
-                            <button
-                                class="w-full px-3 py-2 text-xs text-left transition-colors {settings.theme === opt.value ? 'text-text-primary bg-surface-overlay/40' : 'text-text-secondary hover:text-text-primary hover:bg-surface-overlay/30'}"
-                                on:click|stopPropagation={() => selectTheme(opt.value)}
-                            >
-                                {opt.label}
-                            </button>
-                            {/each}
-                        </div>
-                        {/if}
-                    </div>
-                </div>
-
-                <!-- Font Family -->
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-xs text-text-primary">Font</div>
-                        <div class="text-[10px] text-text-tertiary">Interface & code font</div>
-                    </div>
-                    <div class="relative font-dropdown-wrapper">
-                        <button
-                            class="min-w-[140px] flex items-center justify-between gap-2 bg-surface-overlay/60 border border-surface-overlay text-text-primary text-xs rounded-lg px-3 py-1.5 outline-none focus:border-accent transition-colors cursor-pointer"
-                            style="font-family: '{settings.fontFamily || 'JetBrains Mono'}', monospace;"
-                            on:click|stopPropagation={() => { showFontDropdown = !showFontDropdown; showThemeDropdown = false; }}
-                        >
-                            <span>{settings.fontFamily || 'JetBrains Mono'}</span>
-                            <svg class="w-3.5 h-3.5 text-text-tertiary transition-transform duration-200 {showFontDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-                            </svg>
-                        </button>
-
-                        {#if showFontDropdown}
-                        <div class="absolute right-0 top-full mt-1 w-[200px] max-h-[240px] overflow-y-auto bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/50 rounded-xl shadow-[var(--shadow-dropdown)] z-[300] animate-dropdown-in custom-scrollbar">
-                            {#each systemFonts as font}
-                            <button
-                                class="w-full px-3 py-2 text-xs text-left transition-colors {settings.fontFamily === font ? 'text-text-primary bg-surface-overlay/40' : 'text-text-secondary hover:text-text-primary hover:bg-surface-overlay/30'}"
-                                style="font-family: '{font}', monospace;"
-                                on:click|stopPropagation={() => { settings.fontFamily = font; showFontDropdown = false; }}
-                            >
-                                {font}
-                            </button>
-                            {/each}
-                        </div>
-                        {/if}
-                    </div>
-                </div>
-
-                <!-- Start Minimized -->
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-xs text-text-primary">Start Minimized</div>
-                        <div class="text-[10px] text-text-tertiary">Launch directly to system tray</div>
-                    </div>
-                    <button class="w-9 h-5 rounded-full transition-colors duration-200 relative {settings.startMinimized ? 'bg-accent' : 'bg-surface-overlay'}" on:click={() => settings.startMinimized = !settings.startMinimized}>
-                        <div class="w-3.5 h-3.5 rounded-full bg-white absolute top-0.5 transition-transform duration-200 {settings.startMinimized ? 'translate-x-4' : 'translate-x-0.5'}"></div>
-                    </button>
-                </div>
-
-                <!-- Auto Start -->
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-xs text-text-primary">Launch on Startup</div>
-                        <div class="text-[10px] text-text-tertiary">Start KeyStats when Windows boots</div>
-                    </div>
-                    <button class="w-9 h-5 rounded-full transition-colors duration-200 relative {settings.autoStart ? 'bg-accent' : 'bg-surface-overlay'}" on:click={() => settings.autoStart = !settings.autoStart}>
-                        <div class="w-3.5 h-3.5 rounded-full bg-white absolute top-0.5 transition-transform duration-200 {settings.autoStart ? 'translate-x-4' : 'translate-x-0.5'}"></div>
-                    </button>
-                </div>
-
-                <div class="h-px bg-surface-overlay/40"></div>
-
-                <!-- Data Directory (read-only) -->
+        <div class="space-y-4">
+            <!-- Theme -->
+            <div class="flex items-center justify-between">
                 <div>
-                    <div class="text-xs text-text-primary mb-1">Data Directory</div>
-                    <div class="text-[10px] text-text-tertiary font-mono bg-surface-overlay/30 border border-surface-overlay/30 rounded-md px-2 py-1.5 break-all">{settings.dataDir || 'Loading...'}</div>
+                    <div class="text-xs text-text-primary">Theme</div>
+                    <div class="text-[10px] text-text-tertiary">Interface color scheme</div>
                 </div>
+                <Dropdown
+                    open={showThemeDropdown}
+                    onToggle={() => { showThemeDropdown = !showThemeDropdown; showFontDropdown = false; }}
+                    items={themeOptions}
+                    display={themeOptions.find(o => o.value === settings.theme)?.label || settings.theme}
+                    itemLabel={(o) => o.label}
+                    isActive={(o) => o.value === settings.theme}
+                    onSelect={(o) => { settings.theme = o.value; showThemeDropdown = false; }}
+                    buttonClass="min-w-[100px]"
+                    wrapperClass="theme-dropdown-wrapper"
+                />
+            </div>
 
-                <!-- Portable Mode (read-only) -->
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-xs text-text-primary">Portable Mode</div>
-                        <div class="text-[10px] text-text-tertiary">Store data next to the executable</div>
-                    </div>
-                    <span class="text-[10px] font-medium px-2 py-0.5 rounded-md {settings.portableMode ? 'bg-accent/10 text-accent' : 'bg-surface-overlay/50 text-text-tertiary'}">
-                        {settings.portableMode ? 'Active' : 'Inactive'}
-                    </span>
+            <!-- Font Family -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-xs text-text-primary">Font</div>
+                    <div class="text-[10px] text-text-tertiary">Interface & code font</div>
                 </div>
+                <Dropdown
+                    open={showFontDropdown}
+                    onToggle={() => { showFontDropdown = !showFontDropdown; showThemeDropdown = false; }}
+                    items={systemFonts}
+                    display={settings.fontFamily || DEFAULT_FONT}
+                    itemLabel={(f) => f}
+                    isActive={(f) => settings.fontFamily === f}
+                    onSelect={(f) => { settings.fontFamily = f; showFontDropdown = false; }}
+                    buttonClass="min-w-[140px]"
+                    buttonStyle={`font-family: '${settings.fontFamily || DEFAULT_FONT}', monospace;`}
+                    menuClass="w-[200px] max-h-[240px] overflow-y-auto custom-scrollbar"
+                    itemStyle={(f) => `font-family: '${f}', monospace;`}
+                    wrapperClass="font-dropdown-wrapper"
+                />
+            </div>
+
+            <!-- Start Minimized -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-xs text-text-primary">Start Minimized</div>
+                    <div class="text-[10px] text-text-tertiary">Launch directly to system tray</div>
+                </div>
+                <button class="w-9 h-5 rounded-full transition-colors duration-200 relative {settings.startMinimized ? 'bg-accent' : 'bg-surface-overlay'}" on:click={() => settings.startMinimized = !settings.startMinimized}>
+                    <div class="w-3.5 h-3.5 rounded-full bg-white absolute top-0.5 transition-transform duration-200 {settings.startMinimized ? 'translate-x-4' : 'translate-x-0.5'}"></div>
+                </button>
+            </div>
+
+            <!-- Auto Start -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-xs text-text-primary">Launch on Startup</div>
+                    <div class="text-[10px] text-text-tertiary">Start KeyStats when Windows boots</div>
+                </div>
+                <button class="w-9 h-5 rounded-full transition-colors duration-200 relative {settings.autoStart ? 'bg-accent' : 'bg-surface-overlay'}" on:click={() => settings.autoStart = !settings.autoStart}>
+                    <div class="w-3.5 h-3.5 rounded-full bg-white absolute top-0.5 transition-transform duration-200 {settings.autoStart ? 'translate-x-4' : 'translate-x-0.5'}"></div>
+                </button>
+            </div>
+
+            <div class="h-px bg-surface-overlay/40"></div>
+
+            <!-- Data Directory (read-only) -->
+            <div>
+                <div class="text-xs text-text-primary mb-1">Data Directory</div>
+                <div class="text-[10px] text-text-tertiary font-mono bg-surface-overlay/30 border border-surface-overlay/30 rounded-md px-2 py-1.5 break-all">{settings.dataDir || 'Loading...'}</div>
+            </div>
+
+            <!-- Portable Mode (read-only) -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-xs text-text-primary">Portable Mode</div>
+                    <div class="text-[10px] text-text-tertiary">Store data next to the executable</div>
+                </div>
+                <span class="text-[10px] font-medium px-2 py-0.5 rounded-md {settings.portableMode ? 'bg-accent/10 text-accent' : 'bg-surface-overlay/50 text-text-tertiary'}">
+                    {settings.portableMode ? 'Active' : 'Inactive'}
+                </span>
             </div>
         </div>
-
-        <div class="px-6 pb-6 flex gap-3 justify-end">
-            <button class="px-4 py-2 text-xs font-medium text-text-secondary bg-surface-overlay/50 hover:bg-surface-overlay rounded-lg transition-colors border border-surface-overlay" on:click={closePanel}>
-                Cancel
-            </button>
-            <button class="px-4 py-2 text-xs font-medium text-white bg-accent hover:bg-accent/80 rounded-lg transition-colors shadow-lg shadow-accent/20" on:click={saveSettings} disabled={saving}>
-                {saving ? 'Saving...' : 'Save'}
-            </button>
-        </div>
     </div>
-</div>
-{/if}
 
-<style>
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-    @keyframes modalIn {
-        from { opacity: 0; transform: scale(0.92) translateY(8px); }
-        to { opacity: 1; transform: scale(1) translateY(0); }
-    }
-    @keyframes dropdownIn {
-        from { opacity: 0; transform: scale(0.95) translateY(-4px); }
-        to { opacity: 1; transform: scale(1) translateY(0); }
-    }
-    .animate-fade-in {
-        animation: fadeIn 0.2s ease-out forwards;
-    }
-    .animate-modal-in {
-        animation: modalIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-    .animate-dropdown-in {
-        animation: dropdownIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-    .custom-scrollbar::-webkit-scrollbar {
-        width: 4px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-track {
-        background: transparent;
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: rgba(255,255,255,0.15);
-        border-radius: 4px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: rgba(255,255,255,0.25);
-    }
-</style>
+    <div class="px-6 pb-6 flex gap-3 justify-end">
+        <button class="px-4 py-2 text-xs font-medium text-text-secondary bg-surface-overlay/50 hover:bg-surface-overlay rounded-lg transition-colors border border-surface-overlay" on:click={closePanel}>
+            Cancel
+        </button>
+        <button class="px-4 py-2 text-xs font-medium text-white bg-accent hover:bg-accent/80 rounded-lg transition-colors shadow-lg shadow-accent/20" on:click={saveSettings} disabled={saving}>
+            {saving ? 'Saving...' : 'Save'}
+        </button>
+    </div>
+</ModalShell>
+{/if}

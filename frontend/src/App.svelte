@@ -4,7 +4,8 @@
     import Modal from './components/Modal.svelte';
     import SettingsPanel from './components/SettingsPanel.svelte';
     import { WindowHide, Quit } from '../wailsjs/runtime/runtime.js';
-    import { applyTheme, setupAutoTheme } from './theme.js';
+    import { applyAppearance, cleanupAppearance } from './theme.js';
+    import { api } from './api.js';
 
     // Default empty data structure
     let statsData = {
@@ -12,8 +13,9 @@
         topKeys: [],
         appBreakdown: []
     };
-    
+
     let isLive = true;
+    let fetching = false; // guards against stacked polls when a query takes >500ms
     let showMenu = false;
     let menuPos = { x: 0, y: 0 };
     let menuMode = 'dropdown'; // 'dropdown' | 'context'
@@ -58,23 +60,20 @@
         : 1;
 
     async function fetchLiveStats() {
-        if (!window.go?.app?.App?.GetTodayStats) {
-            console.warn("Go backend not available — stats will be empty");
-            statsData = { totalKeys: 0, topKeys: [], appBreakdown: [] };
-            return;
-        }
+        if (fetching) return;
+        fetching = true;
         try {
-            let data;
-            if (startDays === 0 && endDays === 0) {
-                data = await window.go.app.App.GetTodayStats();
-            } else {
-                data = await window.go.app.App.GetDateRangeStats(startDays, endDays);
-            }
-            if (data && data.status !== 'not implemented') {
-                 statsData = data;
+            const data = (startDays === 0 && endDays === 0)
+                ? await api.getTodayStats()
+                : await api.getDateRangeStats(startDays, endDays);
+            // Skip re-render when the payload is unchanged (e.g. paused/idle).
+            if (data && JSON.stringify(data) !== JSON.stringify(statsData)) {
+                statsData = data;
             }
         } catch (e) {
             console.error("Failed to fetch stats:", e);
+        } finally {
+            fetching = false;
         }
     }
 
@@ -102,18 +101,16 @@
             confirmText: 'Reset',
             cancelText: 'Cancel',
             onConfirm: async () => {
-                if (window.go?.app?.App?.ResetStats) {
-                    try {
-                        await window.go.app.App.ResetStats();
-                        await fetchLiveStats();
-                    } catch (e) {
-                        console.error("Failed to reset stats:", e);
-                        openModal({
-                            title: 'Error',
-                            message: 'Failed to reset records: ' + (e.message || 'Unknown error'),
-                            mode: 'info'
-                        });
-                    }
+                try {
+                    await api.resetStats();
+                    await fetchLiveStats();
+                } catch (e) {
+                    console.error("Failed to reset stats:", e);
+                    openModal({
+                        title: 'Error',
+                        message: 'Failed to reset records: ' + (e.message || 'Unknown error'),
+                        mode: 'info'
+                    });
                 }
             }
         });
@@ -130,17 +127,21 @@
         });
     }
 
-    async function minimizeApp() {
-        // Save window size before hiding
-        if (window.go?.app?.App?.SaveWindowSize) {
-            const width = window.outerWidth;
-            const height = window.outerHeight;
+    // Persist current window size (shared by minimize-to-tray and resize debounce).
+    async function saveWindowSize() {
+        const w = window.outerWidth;
+        const h = window.outerHeight;
+        if (w > 0 && h > 0) {
             try {
-                await window.go.app.App.SaveWindowSize(width, height);
+                await api.saveWindowSize(w, h);
             } catch (e) {
-                console.error("Failed to save window size:", e);
+                console.error("SaveWindowSize failed:", e);
             }
         }
+    }
+
+    async function minimizeApp() {
+        await saveWindowSize();
         WindowHide();
         closeMenu();
     }
@@ -187,27 +188,11 @@
         }
     }
 
-    function handleMenuKeydown(e) {
-        if (e.key === 'Escape') {
-            closeMenu();
-        }
-    }
-
-    let cleanupAutoTheme = () => {};
-
     onMount(() => {
         // Load and apply saved config (theme + font)
-        if (window.go?.app?.App?.GetConfig) {
-            window.go.app.App.GetConfig().then(cfg => {
-                if (cfg?.fontFamily) {
-                    document.documentElement.style.setProperty('--app-font', `"${cfg.fontFamily}", "JetBrains Mono", monospace`);
-                }
-                if (cfg?.theme) {
-                    applyTheme(cfg.theme);
-                    cleanupAutoTheme = setupAutoTheme(cfg.theme);
-                }
-            }).catch(() => {});
-        }
+        api.getConfig().then(cfg => {
+            if (cfg) applyAppearance(cfg);
+        }).catch(() => {});
 
         fetchLiveStats();
         const interval = setInterval(() => {
@@ -215,25 +200,13 @@
         }, 500);
 
         // Debounced resize listener to persist window size
-        const saveSize = debounce(async () => {
-            if (window.go?.app?.App?.SaveWindowSize) {
-                const w = window.outerWidth;
-                const h = window.outerHeight;
-                if (w > 0 && h > 0) {
-                    try {
-                        await window.go.app.App.SaveWindowSize(w, h);
-                    } catch (e) {
-                        console.error("SaveWindowSize failed:", e);
-                    }
-                }
-            }
-        }, 500);
+        const saveSize = debounce(saveWindowSize, 500);
         window.addEventListener('resize', saveSize);
 
         return () => {
             clearInterval(interval);
             window.removeEventListener('resize', saveSize);
-            cleanupAutoTheme();
+            cleanupAppearance();
         };
     });
 </script>
@@ -244,7 +217,7 @@
     <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
     <!-- Title bar — on mousedown calls Go StartDrag for frameless window drag -->
     <div class="h-[84px] flex items-center justify-between px-6 bg-surface-raised border-b border-surface-overlay/50 shadow-sm z-50 select-none cursor-grab"
-         on:mousedown={(e) => { if (!e.target.closest('button')) window.go?.app?.App?.StartDrag?.(); }}
+         on:mousedown={(e) => { if (!e.target.closest('button')) api.startDrag(); }}
          on:contextmenu={(e) => toggleMenu('context', e)}
          role="banner"
     >
@@ -277,7 +250,7 @@
             </div>
             <button 
                 class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-300 border {isLive ? 'text-success bg-success/10 border-success/20' : 'text-text-secondary bg-surface-overlay/30 border-surface-overlay'}"
-                on:click={() => isLive = !isLive}
+                on:click={() => { isLive = !isLive; api.setPaused(!isLive); }}
             >
                 <div class="w-2 h-2 rounded-full {isLive ? 'bg-success animate-pulse shadow-[0_0_8px_rgba(48,209,88,0.6)]' : 'bg-text-secondary'}"></div>
                 {isLive ? 'Live' : 'Paused'}
@@ -296,14 +269,13 @@
 
     <!-- Dropdown / context menu -->
     {#if showMenu}
-    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <!-- svelte-ignore a11y-no-static-element-interactions a11y-click-events-have-key-events -->
     <div class="fixed z-[100] w-48 py-1.5 bg-surface-raised/95 backdrop-blur-2xl border border-surface-overlay/40 rounded-xl shadow-[var(--shadow-dropdown)] overflow-hidden origin-top-right animate-menu"
          style={menuMode === 'context' ? `left: ${menuPos.x}px; top: ${menuPos.y}px;` : 'right: 24px; top: 72px;'}
          data-menu
          role="menu"
          tabindex="-1"
          on:click|stopPropagation
-         on:keydown={handleMenuKeydown}
     >
         <button class="w-full px-4 py-2.5 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-overlay/60 transition-colors flex items-center gap-3" on:click={resetStats}>
             <svg class="w-3.5 h-3.5 opacity-70" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>

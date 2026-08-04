@@ -1,6 +1,5 @@
 <script>
     export let data = [];
-    export let flashKey = { name: '', ts: 0 };
 
     const keyboardLayout = [
         ['Esc', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'Backspace'],
@@ -12,13 +11,27 @@
 
     $: maxCount = Math.max(...data.map(d => d.count), 1);
 
-    // Build a Map for O(1) key lookups instead of O(N) linear search per key cap.
+    // Map backend key names (stats.VKToName) to keyboard layout labels.
+    // Side modifiers merge into their base label so LShift/RShift etc. light up
+    // the same cap; every other name falls through unchanged.
+    const keyNameToLabel = {
+        'Back': 'Backspace',
+        'Shift': 'Shift', 'LShift': 'Shift', 'RShift': 'Shift',
+        'Ctrl': 'Ctrl', 'LCtrl': 'Ctrl', 'RCtrl': 'Ctrl',
+        'Alt': 'Alt', 'LAlt': 'Alt', 'RAlt': 'Alt',
+        'Win': 'Win', 'LWin': 'Win', 'RWin': 'Win',
+        'Fn': 'Fn'
+    };
+
+    // Build a Map keyed by layout label (uppercased) with counts merged across
+    // the aliases above, so getCount is one O(1) lookup per key cap.
     $: countMap = (() => {
         const m = new Map();
         for (const d of data) {
-            if (d.keyName) {
-                m.set(d.keyName.toUpperCase(), d.count);
-            }
+            if (!d.keyName) continue;
+            const label = keyNameToLabel[d.keyName] || d.keyName;
+            const key = label.toUpperCase();
+            m.set(key, (m.get(key) || 0) + d.count);
         }
         return m;
     })();
@@ -60,34 +73,6 @@
         scale = Math.min(1, parentWidth / BASE_WIDTH);
     }
 
-    // Map backend key names to keyboard layout labels
-    const keyNameToLabel = {
-        'Back': 'Backspace',
-        'Caps': 'Caps',
-        'Esc': 'Esc',
-        'Enter': 'Enter',
-        'Tab': 'Tab',
-        'Space': 'Space',
-        'Shift': 'Shift',
-        'Ctrl': 'Ctrl',
-        'Alt': 'Alt',
-        'Win': 'Win',
-        'Fn': 'Fn',
-    };
-
-    function normalizeKeyName(name) {
-        return keyNameToLabel[name] || name;
-    }
-
-    let currentFlash = '';
-    let flashTimer;
-
-    $: if (flashKey.ts && flashKey.name) {
-        currentFlash = normalizeKeyName(flashKey.name);
-        clearTimeout(flashTimer);
-        flashTimer = setTimeout(() => { currentFlash = ''; }, 180);
-    }
-
     import { onMount } from 'svelte';
     onMount(() => {
         updateScale();
@@ -97,7 +82,6 @@
         }
         return () => {
             ro.disconnect();
-            clearTimeout(flashTimer);
         };
     });
 </script>
@@ -114,11 +98,10 @@
                             transition-all duration-500 ease-out cursor-default shrink-0
                             {getKeyWidthClass(key)} h-9
                             {getHeatColor(count)}
-                            {currentFlash && currentFlash.toUpperCase() === key.toUpperCase() ? 'key-flash' : ''}
                             hover:-translate-y-1 hover:shadow-[0_4px_20px_rgba(108,99,255,0.4)] hover:border-accent
                         ">
                             <span class="text-[11px] font-mono select-none">{key}</span>
-                            
+
                             {#if count > 0}
                             <div class="absolute -top-10 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-[#000000cc] backdrop-blur-sm text-white text-[10px] rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none shadow-lg border border-surface-overlay">
                                 <span class="text-accent font-bold">{count}</span> presses
@@ -132,14 +115,3 @@
         </div>
     </div>
 </div>
-
-<style>
-    /* Real-time key press flash — short bright pulse on the key cap */
-    :global(.key-flash) {
-        box-shadow: 0 0 20px rgba(108, 99, 255, 0.7), 0 0 8px rgba(108, 99, 255, 0.5) !important;
-        border-color: rgba(108, 99, 255, 0.8) !important;
-        transform: scale(1.12) !important;
-        z-index: 20 !important;
-        transition: all 0.04s ease-out !important;
-    }
-</style>

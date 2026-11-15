@@ -19,6 +19,7 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
+          path-type: inherit
           update: false
           install: >-
             mingw-w64-x86_64-gcc
@@ -27,7 +28,11 @@ jobs:
         shell: msys2 {0}
         run: |
           export PATH="/mingw64/bin:$PATH"
-          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1 -Clean -RunTests
+          if command -v pwsh >/dev/null 2>&1; then
+            pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1 -Clean -RunTests
+          else
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1 -Clean -RunTests
+          fi
 
       - name: Read release notes
         id: notes

@@ -1,58 +1,37 @@
 # AGENTS.md
 
-High-signal guidance for OpenCode working in this repo.
+High-signal guidance for coding agents working in this repo.
 
 ## Build & Run
 
-- **Dev mode:** `wails dev` (hot-reload frontend + Go backend)
-- **Production build:** `scripts\build.ps1` (PowerShell). Do not run `wails build` directly for releases.
-- **Prerequisites:** Go 1.25+, Bun, Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`), Windows 10/11.
-- **No tests exist.** There is no test runner to invoke.
+- **Production build:** `scripts\build.ps1` (or `scripts\build.ps1 -Clean -RunTests`). Produces `build\bin\key-stats.exe` (`~1.2 MB`, zero external DLL/WebView2 runtime dependencies).
+- **Run tests:** `scripts\build.ps1 -RunTests` or run `.\build\bin\tests_core.exe` and `.\build\bin\tests_ui.exe` directly.
+- **Visual offscreen check:** `.\build\bin\key-stats.exe --snapshot-dir <dir>` renders Dark/Light/Menu-Blur/Settings-Dropdown PNGs cleanly via WIC without blocking.
+- **Prerequisites:** MSYS2 MinGW-w64 (`gcc`, `g++`, `windres`), Windows 10/11 SDK headers (included in MSYS2 MinGW-w64). Zero Node/Bun/Go/WebView2 dependency.
 
 ## Architecture
 
-Wails v2 desktop app. Go backend + Svelte 4 frontend (Vite, Tailwind). Frameless window with Mica backdrop.
+Native Windows desktop app written in **C11 core + minimal zero-STL/zero-exception C++ COM wrapper (`src/ui/d2d_renderer.cpp`)** on top of **Win32 + D3D11 + DXGI SwapChainForComposition (`DXGI_ALPHA_MODE_PREMULTIPLIED`) + DirectComposition + Direct2D 1.1 (`ID2D1DeviceContext`) + DirectWrite + SQLite 3 amalgamation**.
 
-- **Entry:** `main.go` embeds `frontend/dist` and binds `pkg/app/app.go`
-- **Hook thread:** `internal/service/keyboard.go` runs a Win32 `WH_KEYBOARD_LL` hook on a dedicated goroutine with its own message pump.
-- **Data flow:** Hook callback → buffered channel (cap 4096) → batch writer goroutine → SQLite (WAL). All Win32 interop (procs, `MSG`, window lookup) lives in `internal/win32`.
-- **Frontend polling:** Frontend calls `GetTodayStats()` every 500 ms via `setInterval`, guarded by an in-flight flag so slow queries don't stack. The Live/Paused toggle calls `SetPaused` so the recorder (not just the poll) stops.
+- **Entry & Window (`src/main.c`):** Single-instance mutex (`Local\KeyStatsSingleInstanceMutex`), DPI awareness (`DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2`), zero-border frameless window (`WS_EX_APPWINDOW | WS_EX_NOREDIRECTIONBITMAP`, `WS_POPUP | WS_THICKFRAME` + `WM_NCCALCSIZE = 0` + `WM_NCPAINT = 0` + `SWP_FRAMECHANGED` + `WM_NCHITTEST` caption drag/edge resize + `WM_GETMINMAXINFO` taskbar-safe maximize, `780x540` min logical size supporting 4:3 layouts), explicit DWM border suppression (`DWMWA_BORDER_COLOR = DWMWA_COLOR_NONE`, `DWMWA_SYSTEMBACKDROP_TYPE = DWMSBT_NONE`, zero DWM frame margins), persisted `WINDOW_X`/`WINDOW_Y`/`WINDOW_WIDTH`/`WINDOW_HEIGHT`, event-driven wakeups (`KS_WM_KEYS_DIRTY`, `KS_WM_STATS_DIRTY`).
+- **Config (`src/core/config.*`):** `.env` loader/saver with `SRWLOCK`, portable mode detection (executable dir vs `%APPDATA%\key-stats`), `color_scheme` (`indigo`/`ocean`/`emerald`/`amber`/`rose`), window rect persistence, `ks_config_manager_reset_defaults`, and `HKCU\...\Run` startup registration.
+- **Database (`third_party/sqlite/sqlite3.*`, `src/core/db.*`):** Official SQLite amalgamation compiled into cached `build\obj\sqlite3.o` (`WAL` + `synchronous=NORMAL` + `busy_timeout=5000`), lock-free-friendly 4096-slot ring buffer + `CONDITION_VARIABLE` background writer thread, 100-row chunked multi-row `INSERT` + 15-minute bucket rollups (`key_stats_buckets`, `app_stats_buckets`), historical backfill, and monotonic atomic `version()`.
+- **Keyboard Hook (`src/core/keyboard.*`):** Dedicated `WH_KEYBOARD_LL` thread with `GetMessageW` message pump, `HWND`-cached `GetWindowTextW` foreground title lookup, atomic 256-key bitmask (`active_mask[4]`), `180ms` minimum visual key flash, `GetAsyncKeyState` stuck-key recovery, and coalesced `KS_WM_KEYS_DIRTY` UI wakeup.
+- **Stats (`src/core/stats.*`):** Continuous cumulative aggregation across all recorded SQLite data via 15-min rollup buckets with raw `key_events` fallback, `KsStatsCache` keyed by `db_version`.
+- **Tray (`src/core/tray.*`):** Dedicated thread `Shell_NotifyIconW` tray icon (`IDI_APP_ICON`) + bilingual popup menu (`Show Window`/`显示主界面`, `Pause Recording`/`暂停监听`, `Launch on Startup`/`开机自启`, `Reset Layout & Settings`/`重置布局与设置`, `Quit`/`退出`).
+- **UI & Renderer (`src/ui/`):** Pure-C renderer facade (`d2d_renderer.h`) over DirectComposition/Direct2D 1.1 (`Present(0, 0)`) + `CLSID_D2D1GaussianBlur` glass panels (`view_main.c`, `view_keyboard.c`, `view_settings.c`, `widgets.c`, `theme.c`, `i18n.c`). Features 5 color schemes, vertically centered emoji-free typography (including top-right status pill), 4-item `⋮` menu, two-step red confirmation in Settings to clear stats, and virtualized system font dropdown with a borderless themed Win32 `EDIT` child window for native Chinese IME composition.
 
-## Frontend Gotchas
+## Strict Engineering Rules
 
-- **Frameless drag swallows clicks:** The title bar `on:mousedown` calls `StartDrag()` (Win32 `SendMessage(WM_NCLBUTTONDOWN)`). This blocks and swallows all child click events. Guard with `if (!e.target.closest('button'))` before calling `StartDrag()`.
-- **Never use `document.addEventListener('click', ...)` or Wails `EventsOn`:** Svelte 4 uses event delegation (single document-level listener). Adding your own document-level listeners conflicts with Svelte's event processing and makes buttons unresponsive. Use Svelte `on:click` exclusively. For click-outside, attach `on:click` to a parent element and check `e.target.closest(...)` (see `handleMainClick` in `App.svelte`).
-- **Stay on polling; do not reintroduce real-time events:** A previous `EventsOn('key-pressed')` attempt introduced IPC-level instability (the frontend froze after the first event), and the whole `rtChan`/`rtEmitter` pipeline was removed as dead code. Polling is simple, predictable, and works. Do not switch to event-driven updates without extensive testing on a branch.
-- **Call Go bindings through `src/api.js`:** It centralizes the `window.go?.app?.App?.X` availability guard and error normalization. Do not hand-write optional-chaining guards at call sites.
-
-## Backend Gotchas
-
-- **Never do I/O from the hook callback:** `hookProc` runs on a Windows callback thread. Never call `log.Print`, `runtime.EventsEmit`, or blocking operations there. `PushEvent` only bumps an atomic drop counter when the buffer is full; the batch writer logs it on its ticker.
-- **Cache `GetWindowTextW` by foreground hwnd:** `GetWindowTextW` sends a synchronous `WM_GETTEXT` across processes and can block the hook thread if the target window is busy. `getActiveWindowTitle` only calls it when the foreground hwnd changes.
-- **Message pump MUST use blocking `GetMessageW`:** `WH_KEYBOARD_LL` hook callbacks are dispatched by Windows through the message pump thread. Replacing `GetMessageW` with `PeekMessageW` + `Sleep` causes non-deterministic failures because Go's scheduler may migrate the goroutine to a different OS thread during `time.Sleep`, and Windows will no longer dispatch hook callbacks to the correct thread. The original `GetMessageW` blocking loop is correct — Go does not migrate goroutines while they are in a blocking syscall, so it effectively pins the thread even without explicit `runtime.LockOSThread()`.
-- **Message pump MUST use blocking `GetMessageW`:** `WH_KEYBOARD_LL` hook callbacks are dispatched by Windows through the message pump thread. Replacing `GetMessageW` with `PeekMessageW` + `Sleep` causes non-deterministic failures because Go's scheduler may migrate the goroutine to a different OS thread during `time.Sleep`, and Windows will no longer dispatch hook callbacks to the correct thread. The original `GetMessageW` blocking loop is correct — Go does not migrate goroutines while they are in a blocking syscall, so it effectively pins the thread even without explicit `runtime.LockOSThread()`.
-- **Do not add `runtime.LockOSThread()` to the hook message pump without thorough testing:** An attempt to add explicit `LockOSThread()` followed by `PostThreadMessage(WM_QUIT)` wake-up caused the app to freeze after the first keystroke. The exact root cause was never fully determined, but the lesson is: the message pump is a critical and fragile piece of the architecture. Do not change it on `main` without a dedicated test branch and real-world validation.
-- **Tray shutdown order:** On shutdown, call `trayMgr.Quit()` before closing the DB.
-- **Do not export unused methods on `App`:** Wails auto-generates TS bindings for every exported method. Exporting something like `Ctx() context.Context` causes a TS 2305 error because `context` does not exist in the frontend models.
-
-## Build Gotchas
-
-- **`frontend/dist` must exist before `wails build -s`:** `wails build -s` skips the Vite build but still embeds `frontend/dist` via `//go:embed`. If `dist` is missing or empty, the final `.exe` crashes silently on startup because `-H windowsgui -s -w` suppresses the console.
-- **Delete `.syso` before every build:** `rsrc` generates `rsrc_windows_amd64.syso`. Go auto-picks up `.syso` files. If an old one is present, the linker fails with `too many .rsrc sections`. The build script deletes it at the start, regenerates it before the final `go build`, and deletes it again at the end.
-- **Do NOT delete `frontend/wailsjs` during clean:** The frontend Vite build imports `../wailsjs/runtime/runtime.js`. If `wailsjs` is missing, Vite fails. If it is accidentally deleted, run `wails generate module` (requires `frontend/dist` to exist — create an empty dir with `.gitkeep` first).
-- **Patch generated bindings after every Wails build:** Wails generates `frontend/wailsjs/go/app/App.js` with `// @ts-check`. This causes TS 7006/7015 errors on `window['go']...` bracket access. Do not try to fix this with `jsconfig.json` — `exclude` does not suppress file-level directives, and `jsconfig.json` triggers a separate `moduleResolution=node10` deprecation error. The correct fix is the `patch:wails` npm script (run automatically by the build script) that replaces `// @ts-check` with `// @ts-nocheck`.
-- **Build order:** 1) deep clean (`.syso`, `frontend/dist`, `build/bin`) → 2) `bun install` + `bun run build` → 3) `wails build -s` → 4) `bun run patch:wails` → 5) `rsrc` → 6) `go build` → 7) clean up `.syso`.
-
-## Release Workflow
-
-- GitHub Actions (`.github/workflows/release.yml`) triggers on tag push matching `v*`.
-- Bump version in `wails.json`, write release notes to `docs/releases/<tag>.md`, commit, then `git tag vX.Y.Z && git push --tags`.
-- CI builds on `windows-latest` and attaches `build/bin/key-stats.exe`.
+- **Keep C11 pure everywhere outside `src/ui/d2d_renderer.cpp`:** All business logic, SQLite access, keyboard hooks, tray, themes, layouts, and views compile with `-std=c11 -O2 -Wall -Wextra -Werror`. Only `src/ui/d2d_renderer.cpp` uses C++ (`-std=c++17 -fno-exceptions -fno-rtti`) cleanly for COM interfaces.
+- **Zero-blocking hook callback:** `LowLevelKeyboardProc` must NEVER block on SQLite, disk I/O, or heap allocation; push into the fixed 4096-slot ring buffer and update atomics only.
+- **Shutdown ordering:** Always stop in order `ks_tray_stop` -> `ks_keyboard_stop` -> `ks_view_main_destroy` -> `ks_d2d_destroy` -> `ks_db_close` before exiting.
+- **Render before ShowWindow:** Render the initial frame (`ks_view_main_render`) before `ShowWindow(hwnd, SW_SHOW)` so startup is 100% flicker-free.
 
 ## Config & Data Locations
 
 | Resource | Path |
 |----------|------|
-| SQLite DB | `%APPDATA%\key-stats\data.db` |
-| `.env` config | Next to executable if `PORTABLE_MODE=1`, else `%APPDATA%\key-stats\.env` |
+| SQLite DB | `%APPDATA%\key-stats\data.db` (or next to exe in portable mode) |
+| `.env` config | Next to executable if `.env` exists there without `PORTABLE_MODE=false`, else `%APPDATA%\key-stats\.env` |
 | Release notes | `docs/releases/v<version>.md` |

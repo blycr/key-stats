@@ -1,10 +1,6 @@
 # Build artifacts
 build/bin/
-rsrc_windows_amd64.syso
-frontend/dist/
-
-# Dependencies
-frontend/node_modules/
+build/obj/
 
 # IDE / Tools
 .vscode/
@@ -23,9 +19,6 @@ Thumbs.db
 # Environment / secrets
 .env
 .env.local
-
-# Vite / Svelte temp files
-frontend/vite.config.js.timestamp-*.mjs
 
 # Coverage / test artifacts
 coverage/

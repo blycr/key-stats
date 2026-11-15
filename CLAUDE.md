@@ -2,177 +2,56 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Build & Run
+## Build & Test
 
-### Dev mode
-```cmd
-:: Hot-reload frontend + Go backend
-wails dev
+```powershell
+# Clean build + compile native key-stats.exe + run all C11 core & UI unit tests
+scripts\build.ps1 -Clean -RunTests
+
+# Incremental build (reuses cached sqlite3.o)
+scripts\build.ps1 -RunTests
+
+# Export headless Direct2D visual snapshots (Dark, Light, Gaussian Blur Menu, Settings + Font Dropdown)
+.\build\bin\key-stats.exe --snapshot-dir .\snapshots
 ```
 
-### Production build
-```cmd
-:: Full clean + rebuild -> build\bin\key-stats.exe
-:: Steps: deep clean -> bun install -> vite build -> wails bindings -> TS patch -> rsrc -> go build
-scripts\build.ps1
-```
-
-### Manual steps (only if debugging the build itself)
-```cmd
-:: 1. Clean (do NOT delete frontend\wailsjs — Vite needs it)
-if exist rsrc_windows_amd64.syso del rsrc_windows_amd64.syso
-if exist frontend\dist rmdir /s /q frontend\dist
-if exist build\bin rmdir /s /q build\bin
-
-:: 2. Frontend
-cd frontend && bun install && bun run build && cd ..
-
-:: 3. Wails bindings + intermediate compile
-wails build -s
-
-:: 4. Patch generated TS bindings
-cd frontend && bun run patch:wails && cd ..
-
-:: 5. Icon resource
-if exist rsrc_windows_amd64.syso del rsrc_windows_amd64.syso
-go run github.com/akavel/rsrc@latest -ico build\windows\icon.ico -o rsrc_windows_amd64.syso
-
-:: 6. Final stripped binary
-go build -tags "desktop,production" -trimpath -ldflags="-H windowsgui -s -w" -o build\bin\key-stats.exe .
-```
-
-Prerequisites: Go 1.25+, Bun, Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`), Windows 10/11.
+Prerequisites: MSYS2 MinGW-w64 (`gcc`, `g++`, `windres`), Windows 10/11. Zero Go, Bun, Node, or WebView2 runtime required.
 
 ## Project Structure
 
 ```
 key-stats\
-├── main.go                     # Entry point (embed + wails.Run)
-├── wails.json                  # Wails config (bun scripts)
-├── go.mod / go.sum
 ├── scripts\
-│   ├── build.ps1               # Production build script (PowerShell)
-│   ├── gen_ico.go              # Multi-size ICO generator (from PNG)
-│   └── Clear-IconCache.ps1     # Helper: clear Windows icon cache
+│   ├── build.ps1                 # Clean/incremental build + unit tests -> build\bin\key-stats.exe
+│   └── Clear-IconCache.ps1       # Helper: clear Windows icon cache
 ├── build\
-│   ├── appicon.png
+│   ├── appicon.png               # Source icon
 │   └── windows\
-│       ├── icon.ico            # Windows multi-size icon
-│       └── wails.exe.manifest
-├── frontend\
-│   ├── package.json
-│   ├── vite.config.js
-│   ├── tailwind.config.js
-│   └── src\
-│       ├── main.js
-│       ├── app.css
-│       ├── App.svelte          # Main layout, title bar, menus, modals, polling loop
-│       ├── api.js              # Single wrapper around window.go.app.App bindings
-│       ├── theme.js            # Theme + font application, auto-theme listener lifecycle
-│       └── components\
-│           ├── KeyboardMap.svelte  # QWERTY heatmap with auto-scaling via ResizeObserver
-│           ├── Modal.svelte        # Glassmorphism dialog (info/confirm modes)
-│           ├── ModalShell.svelte   # Shared modal shell (overlay + card + accent)
-│           ├── Dropdown.svelte     # Shared trigger+chevron+menu dropdown
-│           └── SettingsPanel.svelte # Theme, startup toggles, saves via Go config API
-├── internal\
-│   ├── config\
-│   │   └── config.go           # .env-based config + in-memory Manager + window size persistence
-│   ├── db\
-│   │   └── sqlite.go           # SQLite init + batch writer goroutine
-│   ├── models\
-│   │   └── models.go           # KeyEvent, DailyStats, TopKey, AppBreakdown structs
-│   ├── service\
-│   │   └── keyboard.go         # Win32 WH_KEYBOARD_LL hook + message pump goroutine + pause
-│   ├── stats\
-│   │   └── stats.go            # VK code -> key name mapping (F1-F24, media keys, etc.)
-│   └── win32\
-│       └── win32.go            # Shared Win32 procs, MSG struct, FindMainWindow
-└── pkg\
-    ├── app\
-    │   ├── app.go              # App struct: Startup, Shutdown, GetTodayStats, ResetStats, etc.
-    │   └── drag_windows.go     # Win32 SendMessage(WM_NCLBUTTONDOWN) for frameless drag
-    └── tray\
-        └── tray_windows.go     # System tray icon + menu (getlantern/systray)
+│       └── icon.ico              # Multi-size Windows icon embedded via windres
+├── third_party\sqlite\
+│   ├── sqlite3.c / sqlite3.h     # Official SQLite 3 amalgamation
+├── src\
+│   ├── main.c                    # Win32 entry, borderless WS_EX_NOREDIRECTIONBITMAP chrome, DPI/rect persistence, WM_APP wakeups, snapshot CLI
+│   ├── core\
+│   │   ├── win32_util.h/.c       # UTF-8/UTF-16 conversion, recursive mkdir, single-instance mutex
+│   │   ├── config.h/.c           # .env loader/saver, SRWLOCK manager, portable detection, HKCU Run, window rect/scheme reset
+│   │   ├── db.h/.c               # SQLite WAL + 4096-slot ring buffer + 15-min rollup buckets
+│   │   ├── stats.h/.c            # Continuous cumulative rollup queries, VK name map, db_version snapshot cache
+│   │   ├── keyboard.h/.c         # WH_KEYBOARD_LL hook + HWND title cache + 180ms flash bitmask
+│   │   └── tray.h/.c             # Dedicated thread Shell_NotifyIconW tray + EN/ZH menu (Show/Pause/AutoStart/Reset/Quit)
+│   ├── ui\
+│   │   ├── d2d_renderer.h/.cpp   # Zero-STL C++ D3D11 + DirectComposition + Direct2D 1.1 + GaussianBlur
+│   │   ├── theme.h/.c            # Dark/Light palettes + 5 color schemes + 0.35s eased transitions + Windows Auto detect
+│   │   ├── i18n.h/.c             # Bilingual EN / 中文 dictionaries (emoji-free)
+│   │   ├── widgets.h/.c          # Buttons, toggles, progress bars, scrim, number formatting
+│   │   ├── view_keyboard.h/.c    # 6-row responsive QWERTY heatmap + side-aware key flash
+│   │   ├── view_settings.h/.c    # Settings glass modal, color schemes, virtualized font search (Win32 EDIT IME), 2-step red stats clear
+│   │   └── view_main.h/.c        # Titlebar, Top Apps/Keys cards, blurred menus, Status modal
+│   └── resources\
+│       ├── resource.h / app.rc   # Embedded appicon + PerMonitorV2 manifest
+│       └── app.manifest          # Windows PerMonitorV2 DPI + Common Controls v6
+└── tests\
+    ├── test_runner.h             # Lightweight C11 test harness macros
+    ├── test_core.c               # Config/4:3 rect/reset, DB rollup/flush/reset, continuous stats/VK, keyboard bitmask tests
+    └── test_ui.c                 # Keyboard geometry/heat, virtual scroll, font filter, theme/scheme, i18n tests
 ```
-
-## Architecture
-
-Wails v2 desktop app. Go backend embedded in a WebView2 (Chromium) renderer. Frameless window with Mica backdrop.
-
-**Data flow:**
-1. Win32 `WH_KEYBOARD_LL` hook (`internal\service\keyboard.go`) captures keystrokes globally from a dedicated goroutine with its own message pump
-2. Events pushed to buffered channel (cap 4096) -> batch writer goroutine flushes to SQLite every 500ms or 256 events
-3. Frontend polls `GetTodayStats()` every 500ms via `setInterval` (guarded by an in-flight flag); the Live/Paused toggle calls `SetPaused` so the recorder itself stops, not just the poll
-
-**Go -> JS binding:** All exported methods on `pkg\app\App` struct are auto-bound to `window.go.app.App.*` by Wails.
-
-**Frontend component tree:**
-- `App.svelte` — layout, title bar, dropdown/context menus, modals, polling loop
-- `KeyboardMap.svelte` — QWERTY heatmap with auto-scaling via ResizeObserver
-- `Modal.svelte` — glassmorphism dialog (info/confirm modes)
-- `SettingsPanel.svelte` — theme, startup toggles, saves via Go config API
-
-## Critical Patterns & Gotchas
-
-**Event handling in frameless window:** The title bar `on:mousedown` calls `StartDrag()` (Win32 `SendMessage(WM_NCLBUTTONDOWN)`). This blocks until drag completes and **swallows all child click events**. Must guard with `if (!e.target.closest('button'))` to let buttons work.
-
-**Do NOT use document-level event listeners:** Svelte 4 uses event delegation (single document-level listener for clicks). Adding `document.addEventListener('click', ...)` or using `EventsOn` from the Wails runtime causes conflicts with Svelte's event processing, making buttons unresponsive. Use Svelte's `on:click` handlers exclusively. For "click outside" patterns, use `on:click` on a parent element with target checking (see `handleMainClick` in App.svelte).
-
-**Windows hook callback safety:** `hookProc` runs on a Windows callback thread. Never call `runtime.EventsEmit`, `log.Print`, or blocking operations directly. When the event buffer is full, `PushEvent` only bumps an atomic drop counter (logged by the batch writer), and `getActiveWindowTitle` caches the title by foreground hwnd to avoid per-keystroke cross-process `WM_GETTEXT`.
-
-**SQLite:** Uses `modernc.org/sqlite` (pure Go, no CGO). WAL mode enabled, pool limited to one connection so `synchronous=NORMAL` always applies. Data at `%APPDATA%\key-stats\data.db`.
-
-**Config:** `.env`-based config via `internal\config`. Supports `PORTABLE_MODE`, `START_MINIMIZED` (hides to tray on launch), `AUTO_START` (Windows Run key), `THEME`, `FONT_FAMILY`, `WINDOW_WIDTH`, `WINDOW_HEIGHT`. Reads/writes go through an in-memory `config.Manager` (serialized, no lost updates); app bindings call `GetConfig`/`SetConfig`/`SaveWindowSize`.
-
-**System tray:** `pkg\tray\tray_windows.go` uses `getlantern/systray`. Must call `Quit()` on shutdown before closing DB.
-
-## Build Gotchas
-
-**`frontend/dist` must exist before `wails build -s`:** `wails build -s` skips the frontend Vite build but still embeds `frontend/dist` into the Go binary via `//go:embed`. If `dist` is empty (e.g., only `.gitkeep`), the produced EXE crashes immediately on startup with no visible error because `-H windowsgui -s -w` suppresses the console. The build script therefore runs `bun run build` manually before `wails build -s`.
-
-**`.syso` file must be deleted before every build:** `rsrc` generates `rsrc_windows_amd64.syso`. Go automatically picks up `.syso` files in the package directory. If an old `.syso` is present, the linker fails with `too many .rsrc sections`. The build script deletes it at the start, regenerates it before the final `go build`, and deletes it again at the end.
-
-**Never export unused Go methods bound to Wails JS:** `pkg/app/app.go` previously exported `Ctx() context.Context`. Wails auto-generated `frontend/wailsjs/go/app/App.d.ts` with `import {context} from '../models'`, causing a TS 2305 error because no `context` type exists in the frontend models. Removed `Ctx()` from `App` struct and from the generated `.d.ts`.
-
-**Generated `wailsjs/go/app/App.js` has `// @ts-check`:** Wails generates this file with `// @ts-check` on every build, which makes VS Code report TS 7006/7015 errors (implicit any) on `window['go']...` bracket access. Do NOT try to fix this with `jsconfig.json` — the `exclude` option does not suppress file-level `// @ts-check` directives, and adding `jsconfig.json` triggers a separate `moduleResolution=node10` deprecation error. The correct fix is a post-build patch (`patch:wails` in `frontend/package.json`) that replaces `// @ts-check` with `// @ts-nocheck` after every binding generation. The build script runs this patch automatically.
-
-**Do NOT delete `frontend/wailsjs` during clean:** The frontend build (`vite build`) imports `../wailsjs/runtime/runtime.js`. If `wailsjs` is missing, Vite fails with "Could not resolve '../wailsjs/runtime/runtime.js'". The build script therefore only cleans `frontend/dist` and `build/bin`, not `wailsjs`. If `wailsjs` is ever accidentally deleted, run `wails generate module` (requires `frontend/dist` to exist — create an empty dir with `.gitkeep` first).
-
-**Build order matters:**
-1. Deep clean (`.syso`, `frontend/dist`, `build/bin`)
-2. `bun install` + `bun run build` (frontend)
-3. `wails build -s` (bindings + intermediate compile)
-4. `bun run patch:wails` (disable TS strict check)
-5. `rsrc` (icon `.syso`)
-6. `go build` (final stripped binary)
-7. Clean up temp `.syso`
-
-## Release Workflow
-
-GitHub Actions (`.github\workflows\release.yml`) triggers on tag push matching `v*`:
-
-1. **Checkout** -> **Setup Go** (from go.mod) -> **Setup Bun** -> **Install Wails CLI**
-2. **Build:** `wails build -s` (frontend + bindings) -> `rsrc` (embed icon as Windows resource) -> `go build -tags "desktop,production" -trimpath -ldflags="-H windowsgui -s -w"` (stripped GUI binary)
-3. **Release notes:** reads `docs\releases\<tag>.md` if it exists
-4. **Publish:** creates GitHub Release via `softprops/action-gh-release@v2`, attaches `build\bin\key-stats.exe`
-
-All steps run on `windows-latest`. Release name format: `KeyStats <tag>`.
-
-To cut a release:
-```cmd
-:: 1. Bump version in wails.json
-:: 2. Write release notes: docs\releases\v1.0.2.md
-:: 3. Commit and push
-:: 4. Tag and push
-git tag v1.0.2
-git push --tags
-```
-
-## Config & Data Locations
-
-| Resource | Path |
-|----------|------|
-| SQLite DB | `%APPDATA%\key-stats\data.db` |
-| .env config | Next to executable (portable mode) or `%APPDATA%\key-stats\.env` |
-| Release notes | `docs\releases\v<version>.md` |

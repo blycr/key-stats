@@ -1,0 +1,7 @@
+#include "resource.h"
+
+#define CREATEPROCESS_MANIFEST_RESOURCE_ID 1
+#define RT_MANIFEST 24
+
+IDI_APP_ICON ICON "../../build/windows/icon.ico"
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"

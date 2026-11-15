@@ -1,171 +1,51 @@
 # KeyStats
 
-Real-time keyboard usage tracker for Windows. Beautiful, minimal, and stays out of your way.
+Real-time keyboard usage tracker for Windows — lightweight native C11 + Direct2D/DirectComposition desktop app with **zero WebView2 / runtime dependencies** (~1.2 MB single executable).
 
 ![KeyStats Screenshot](docs/screenshot.jpg)
 
 ## Features
 
-- **Global keystroke capture** — low-level Windows hook (`WH_KEYBOARD_LL`), works across all apps
-- **Live dashboard** — total keystrokes, top 10 keys ranking, interactive QWERTY heatmap
-- **Date range stats** — switch between Today, Yesterday, Last 7 Days, and Last 30 Days
-- **System tray** — minimize to tray, show/quit from tray menu
-- **Elegant menus** — `⋯` dropdown + top-bar right-click context menu
-- **Persistent window size** — remembers your last resized dimensions
-- **Custom modal dialogs** — dark glassmorphism alerts that match the app theme
-- **Font configuration** — choose any installed monospace font from Settings (reads system fonts automatically)
-- **Reset stats** — one-click clear all records with confirmation
-- **Comprehensive key mapping** — F1-F24, arrows, media keys, Fn, L/R modifiers, and more
-- **Zero-config storage** — SQLite with WAL mode at `%APPDATA%/key-stats/data.db`
+- **Ultra-lightweight native binary** — pure C11 core + DirectComposition / Direct2D 1.1 UI (~1.2 MB standalone `.exe`, zero Edge WebView2 requirement, instant cold start, 0% idle CPU)
+- **Global keystroke capture** — low-level Windows hook (`WH_KEYBOARD_LL`), works across all apps without blocking typing
+- **Live key highlight** — mirrors physical key presses onto the 6-row QWERTY heatmap with `<1 ms` event-driven wakeup, L/R modifier side detection, and 180 ms visual flash
+- **Seamless borderless native UI** — `WS_EX_NOREDIRECTIONBITMAP` DirectComposition chrome with zero outer non-client border, hardware `CLSID_D2D1GaussianBlur` frosted glass menus/modals, 0.35s animated Dark/Light/Auto transitions, 5 color schemes (`indigo`, `ocean`, `emerald`, `amber`, `rose`), and crisp emoji-free DirectWrite typography
+- **Continuous cumulative dashboard** — cumulative total keystrokes, top apps, top keys ranking, and interactive QWERTY heatmap recorded continuously into local SQLite while running (no calendar/date cutoffs)
+- **Persistent geometry & safe reset** — saves dragged window size (including compact 4:3 aspect ratios down to `780x540`) and monitor-clamped position across restarts, with two-step red danger confirmation in Settings to permanently clear stats
+- **Instant searchable font picker** — virtualized DirectWrite font list with live font preview and native Windows IME search support
+- **Bilingual UI (EN / 中文)** — follows system locale (`auto`) or switches manually between English and Chinese (including tray menu)
+- **System tray & single instance** — Show Window, Pause/Resume Recording, Launch on Startup toggle, Reset Layout & Settings (preserving statistics), and Quit from tray; re-launching focuses the existing window
+- **Zero-config & portable storage** — SQLite with WAL mode & 15-minute rollup buckets at `%APPDATA%/key-stats/data.db`, or portable next to the executable when `.env` is placed alongside it
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Desktop framework | Wails v2 |
-| Backend | Go 1.25+, modernc.org/sqlite |
-| Frontend | Svelte 4, Vite 5 |
-| Styling | Tailwind CSS 3 |
-| Package manager | Bun |
-| System tray | getlantern/systray |
+| Window & OS | Native Win32 API + `PerMonitorV2` DPI |
+| Rendering | Direct3D 11 + DXGI Composition + DirectComposition + Direct2D 1.1 (`CLSID_D2D1GaussianBlur`) + DirectWrite |
+| Core & Hook | Pure C11 (`-Wall -Wextra -Werror`) + `WH_KEYBOARD_LL` + `Shell_NotifyIconW` |
+| Database | SQLite 3 amalgamation (WAL mode, 15m rollups, async batch writer) |
 
-## Project Structure
+## Build & Test
 
-```
-key-stats/
-├── main.go                    # Entry point (embed + wails.Run)
-├── wails.json                 # Wails config (bun scripts, version, product info)
-├── go.mod / go.sum
-├── scripts/
-│   ├── build.ps1              # Production build script (PowerShell)
-│   ├── gen_ico.go             # Multi-size ICO generator (from PNG source)
-│   └── Clear-IconCache.ps1    # Helper: clear Windows icon cache
-├── build/
-│   ├── appicon.png            # Source icon for ICO generation
-│   └── windows/
-│       ├── icon.ico           # Windows multi-size icon (embedded into .exe)
-│       └── wails.exe.manifest # Windows manifest
-├── frontend/
-│   ├── package.json           # Bun scripts + dev dependencies
-│   ├── vite.config.js
-│   ├── tailwind.config.js
-│   ├── index.html
-│   └── src/
-│       ├── main.js            # Svelte entry point
-│       ├── app.css            # Global styles + CSS font variable
-│       ├── App.svelte         # Main layout, title bar, menus, modals, polling loop
-│       └── components/
-│           ├── KeyboardMap.svelte   # QWERTY heatmap with auto-scaling
-│           ├── Modal.svelte         # Glassmorphism dialog (info/confirm)
-│           └── SettingsPanel.svelte # Theme, font, startup toggles
-├── internal/
-│   ├── config/
-│   │   └── config.go          # .env-based config + window size persistence
-│   ├── db/
-│   │   └── sqlite.go          # SQLite init + batch writer goroutine
-│   ├── models/
-│   │   └── models.go          # KeyEvent, TodaySummary structs
-│   ├── service/
-│   │   └── keyboard.go        # Win32 LL hook + message pump goroutine
-│   └── stats/
-│       └── stats.go           # VK code → key name mapping
-├── pkg/
-│   ├── app/
-│   │   ├── app.go             # App struct, lifecycle, API bindings, window icon fix
-│   │   └── drag_windows.go    # Native window drag (frameless)
-│   └── tray/
-│       └── tray_windows.go    # System tray icon + menu
-└── docs/
-    └── releases/
-        └── v<version>.md      # Release notes per tag
-```
+### Prerequisites
 
-## Prerequisites
+- Windows 10 / 11
+- MSYS2 MinGW-w64 (`gcc`, `g++`, `windres`)
 
-- Go 1.25+
-- [Bun](https://bun.sh/)
-- Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
-- Windows 10/11
-
-## Development
+### Build & Run Unit Tests
 
 ```powershell
-# Run in dev mode (hot-reload)
-wails dev
-
-# Build production binary
-.\scripts\build.ps1
-
-# Or manually:
-cd frontend && bun install && bun run build && cd ..
-wails build -s
-cd frontend && bun run patch:wails && cd ..
-go run github.com/akavel/rsrc@latest -ico build\windows\icon.ico -o rsrc_windows_amd64.syso
-go build -tags "desktop,production" -trimpath -ldflags="-H windowsgui -s -w" -o build\bin\key-stats.exe .
+# Full clean build + run core and UI unit tests -> build\bin\key-stats.exe
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Clean -RunTests
 ```
 
-## Release
-
-Releases are built automatically by GitHub Actions when a version tag is pushed.
+### Run
 
 ```powershell
-# 1. Bump version in wails.json
-# 2. Write release notes: docs\releases\v1.0.2.md
-# 3. Commit and push
-# 4. Tag and push
-git tag v1.0.2
-git push --tags
+.\build\bin\key-stats.exe
 ```
 
-The CI workflow compiles `key-stats.exe` and publishes it on the [Releases](https://github.com/blycr/key-stats/releases) page.
+## Releases
 
----
-
-The `wails.json` is already configured to use `bun`:
-
-```json
-{
-  "frontend:install": "bun install",
-  "frontend:build": "bun run build",
-  "frontend:dev:watcher": "bun run dev"
-}
-```
-
-## Build Output
-
-```
-build/bin/key-stats.exe
-```
-
-## Data Storage
-
-SQLite at `%APPDATA%/key-stats/data.db` with WAL mode enabled.
-
-Schema auto-creates on first run:
-
-```sql
-CREATE TABLE key_events (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    key_code    INTEGER NOT NULL,   -- Windows VK code
-    app_name    TEXT    NOT NULL,   -- foreground window title
-    timestamp   INTEGER NOT NULL    -- Unix epoch ms
-);
-```
-
-Config file (`.env`) at `%APPDATA%/key-stats/.env`.
-
-## Architecture
-
-```
-Win32 Hook (dedicated goroutine + message pump)
-    ↓
-Event Channel (buffered, cap 4096)
-    ↓
-Batch Writer (goroutine) — 500 ms / 256 events → SQLite (WAL)
-    ↑
-Wails Frontend ←—— 500 ms poll (in-flight guarded) ——→ Svelte + Tailwind
-```
-
-## License
-
-MIT License — see [LICENSE](LICENSE).
+GitHub Actions builds a stripped native `key-stats.exe` and runs all unit tests automatically on `v*` tag pushes via `.github/workflows/release.yml`.

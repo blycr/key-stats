@@ -15,38 +15,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Set up MSYS2 / MinGW-w64
+        uses: msys2/setup-msys2@v2
         with:
-          go-version-file: go.mod
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
-      - name: Build frontend
+      - name: Build native binary & run unit tests
+        shell: msys2 {0}
         run: |
-          cd frontend
-          bun install
-          bun run build
-
-      - name: Build Wails bindings
-        run: wails build -s
-
-      - name: Patch generated TS bindings
-        run: cd frontend && bun run patch:wails
-
-      - name: Generate Windows resource (icon)
-        run: |
-          if (Test-Path rsrc_windows_amd64.syso) { Remove-Item rsrc_windows_amd64.syso }
-          go run github.com/akavel/rsrc@latest -ico build/windows/icon.ico -o rsrc_windows_amd64.syso
-
-      - name: Compile with stripped symbols
-        run: go build -tags "desktop,production" -trimpath -ldflags="-H windowsgui -s -w" -o build/bin/key-stats.exe .
+          export PATH="/mingw64/bin:$PATH"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1 -Clean -RunTests
 
       - name: Read release notes
         id: notes
